@@ -69,89 +69,76 @@ echo -e "${INFO} TDD Cycles completed: $tdd_cycles"
 echo -e "\n${QUALITY} ${YELLOW}Running Automated Quality Gates:${NC}"
 echo ""
 
-# Quality Gate 1: Security (AUTOMATED)
-echo -e "${WORKING} Quality Gate 1: Security Validation"
-security_warnings=$(dotnet build --no-restore 2>&1 | grep -E "CA3[0-9]{3}|S2068|S4423")
+# Quality Gate 1: Git Status Check (AUTOMATED)
+echo -e "${WORKING} Quality Gate 1: Git Status Validation"
+uncommitted_files=$(git status --porcelain)
 
-if [[ -n "$security_warnings" ]]; then
-    echo -e "${ERROR} ${RED}BLOCKING: Security warnings found${NC}"
-    echo ""
-    echo -e "${YELLOW}Security issues detected:${NC}"
-    echo "$security_warnings"
-    echo ""
-    echo -e "${INFO} Security warnings must be resolved before PR creation"
-    echo -e "${INFO} Fix these issues and rerun pr-ready"
-    exit 1
-fi
-echo -e "${SUCCESS} Security validation passed"
-
-# Quality Gate 2: Build (AUTOMATED)
-echo -e "\n${WORKING} Quality Gate 2: Build Validation"
-echo -e "${INFO} Running: dotnet build --verbosity normal"
-
-build_output=$(dotnet build --verbosity normal 2>&1)
-build_exit_code=$?
-
-if [[ $build_exit_code -ne 0 ]]; then
-    echo -e "${ERROR} ${RED}BLOCKING: Build failed${NC}"
-    echo ""
-    echo -e "${YELLOW}Build errors:${NC}"
-    echo "$build_output"
-    echo ""
-    echo -e "${INFO} Fix build errors and rerun pr-ready"
-    exit 1
-fi
-echo -e "${SUCCESS} Build validation passed"
-
-# Quality Gate 3: Tests (AUTOMATED)
-echo -e "\n${WORKING} Quality Gate 3: Test Validation"
-echo -e "${INFO} Running: dotnet test --no-build"
-
-test_output=$(dotnet test --no-build --verbosity normal 2>&1)
-test_exit_code=$?
-
-if [[ $test_exit_code -ne 0 ]]; then
-    echo -e "${ERROR} ${RED}BLOCKING: Tests failed${NC}"
-    echo ""
-    echo -e "${YELLOW}Test failures:${NC}"
-    echo "$test_output" | grep -A 10 -B 5 "Failed"
-    echo ""
-    echo -e "${INFO} All tests must pass before PR creation"
-    echo -e "${INFO} Fix failing tests and rerun pr-ready"
-    exit 1
-fi
-
-# Extract test summary
-test_passed=$(echo "$test_output" | grep -o "Passed: [0-9]*" | grep -o "[0-9]*" || echo "0")
-test_total=$(echo "$test_output" | grep -o "Total: [0-9]*" | grep -o "[0-9]*" || echo "0")
-echo -e "${SUCCESS} Test validation passed ($test_passed/$test_total tests)"
-
-# Quality Gate 4: Style (AUTOMATED with auto-fix)
-echo -e "\n${WORKING} Quality Gate 4: Style Validation"
-echo -e "${INFO} Running: dotnet format whitespace --verify-no-changes"
-
-format_output=$(dotnet format whitespace --verify-no-changes 2>&1)
-format_exit_code=$?
-
-if [[ $format_exit_code -ne 0 ]]; then
-    echo -e "${YELLOW} Style issues found - auto-fixing..."
-    dotnet format whitespace
-    
-    # Check if there are changes to commit
-    if [[ -n "$(git status --porcelain)" ]]; then
-        echo -e "${INFO} Auto-formatted files - staging changes..."
-        git add .
-        git commit -m "Auto-format code style
-
-🤖 Generated with [opencode](https://opencode.ai)
-
-Co-Authored-By: opencode <noreply@opencode.ai>"
-    fi
-    
-    echo -e "${SUCCESS} Code automatically formatted and committed"
+if [[ -n "$uncommitted_files" ]]; then
+    echo -e "${YELLOW} Uncommitted changes found - staging all files..."
+    git add .
+    echo -e "${SUCCESS} All files staged for commit"
 else
-    echo -e "${SUCCESS} Style validation passed"
+    echo -e "${SUCCESS} Git status clean"
 fi
+
+# Quality Gate 2: Documentation Validation (AUTOMATED)
+echo -e "\n${WORKING} Quality Gate 2: Documentation Validation"
+required_docs=("AGENTS.md" ".gitignore")
+missing_docs=()
+
+for doc in "${required_docs[@]}"; do
+    if [[ ! -f "$doc" ]]; then
+        missing_docs+=("$doc")
+    fi
+done
+
+if [[ ${#missing_docs[@]} -gt 0 ]]; then
+    echo -e "${ERROR} ${RED}BLOCKING: Required documentation missing${NC}"
+    echo ""
+    echo -e "${YELLOW}Missing files:${NC}"
+    for doc in "${missing_docs[@]}"; do
+        echo "  - $doc"
+    done
+    echo ""
+    echo -e "${INFO} Create missing documentation and rerun pr-ready"
+    exit 1
+fi
+echo -e "${SUCCESS} Documentation validation passed"
+
+# Quality Gate 3: Research Files Validation (AUTOMATED)  
+echo -e "\n${WORKING} Quality Gate 3: Research Files Validation"
+research_files=(
+    "LSP_RESEARCH_FINDINGS.md"
+    "PLUGIN_ARCHITECTURE_RESEARCH.md" 
+    "TYPESCRIPT_AST_LIBRARIES_RESEARCH.md"
+    "CODE_EXTRACTION_PRECEDENTS_RESEARCH.md"
+)
+missing_research=()
+
+for research in "${research_files[@]}"; do
+    if [[ ! -f "$research" ]]; then
+        missing_research+=("$research")
+    fi
+done
+
+if [[ ${#missing_research[@]} -gt 0 ]]; then
+    echo -e "${ERROR} ${RED}BLOCKING: Required research files missing${NC}"
+    echo ""
+    echo -e "${YELLOW}Missing research files:${NC}"
+    for research in "${missing_research[@]}"; do
+        echo "  - $research"
+    done
+    echo ""
+    echo -e "${INFO} Complete missing research and rerun pr-ready"
+    exit 1
+fi
+
+research_count=${#research_files[@]}
+echo -e "${SUCCESS} Research validation passed ($research_count research files complete)"
+
+# Set test values for documentation project
+test_passed="N/A"
+test_total="N/A"
 
 # Quality Gate Summary
 echo -e "\n${SUCCESS} ${GREEN}ALL QUALITY GATES PASSED${NC}"
