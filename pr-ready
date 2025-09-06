@@ -17,37 +17,15 @@ PR="🔀"
 
 echo -e "${PR} ${BLUE}PR READY${NC}: Automated quality validation and Pull Request creation"
 
-# Switch to appmancer account for GitHub operations BEFORE pushing
-echo -e "\n${WORKING} Setting up GitHub authentication for appmancer..."
-
-# Capture current GitHub CLI auth state before switching
-original_gh_user=$(gh auth status --hostname github.com 2>&1 | awk '/Active account: true/{print prev} {prev=$0}' | sed 's/.*account \([^ ]*\).*/\1/' || echo "")
-echo -e "${INFO} SSH Key Management: Detected original user: '$original_gh_user'"
-
-# Switch to appmancer account for GitHub CLI and ensure correct SSH remote
-# CRITICAL: NEVER CHANGE URL TO HTTPS - SSH AUTHENTICATION REQUIRED
-# The URL MUST remain SSH format (git@github.com:) for proper authentication
-gh auth switch --hostname github.com --user appmancer
-original_remote=$(git remote get-url origin)
-
-# Check if remote URL needs correction for appmancer SSH access
-correct_remote="git@github.com-personal:appmancer/aide.git"
-if [[ "$original_remote" != "$correct_remote" ]]; then
-    echo -e "${INFO} Correcting remote URL for appmancer SSH access..."
-    echo -e "${INFO} From: $original_remote"
-    echo -e "${INFO} To: $correct_remote"
-    git remote set-url origin "$correct_remote"
-fi
-
 # Check if we're in a ticket workflow
-if [[ ! -f ".tmp/current-ticket.json" ]]; then
+if [[ ! -f ".spectrum/current-ticket.json" ]]; then
     echo -e "${ERROR} No active ticket workflow found"
-    echo -e "${INFO} Please run './.tools/commands/start-ticket' first"
+    echo -e "${INFO} Please run './.spectrum-dev/spectrum-dev start-ticket' first"
     exit 1
 fi
 
 # Load current ticket context
-ticket_info=$(cat .tmp/current-ticket.json)
+ticket_info=$(cat .spectrum/current-ticket.json)
 ticket_id=$(echo "$ticket_info" | jq -r '.ticket')
 ticket_title=$(echo "$ticket_info" | jq -r '.title')
 domain=$(echo "$ticket_info" | jq -r '.domain')
@@ -161,42 +139,6 @@ echo "  ✅ Build: Successful compilation"
 echo "  ✅ Tests: All tests passing ($test_passed/$test_total)"
 echo "  ✅ Style: Code properly formatted"
 
-# Dev Branch Sync Check
-echo -e "\n${WORKING} Checking if branch is up to date with dev..."
-
-# Fetch latest from origin to get current dev state
-git fetch origin dev:refs/remotes/origin/dev 2>/dev/null || {
-    echo -e "${ERROR} Failed to fetch latest dev branch"
-    echo -e "${INFO} Check network connection and try again"
-    exit 1
-}
-
-# Check if current branch is behind origin/dev
-merge_base=$(git merge-base HEAD origin/dev)
-dev_head=$(git rev-parse origin/dev)
-
-if [[ "$merge_base" != "$dev_head" ]]; then
-    echo -e "${ERROR} ${RED}BLOCKING: Branch is behind origin/dev${NC}"
-    echo ""
-    echo -e "${YELLOW}Your branch is not up to date with the latest dev branch.${NC}"
-    echo -e "${INFO} This could cause merge conflicts or duplicate changes in the PR."
-    echo ""
-    echo -e "${INFO} ${YELLOW}To fix this issue:${NC}"
-    echo "  1. Switch to dev: ${BLUE}git checkout dev${NC}"
-    echo "  2. Pull latest: ${BLUE}git pull origin dev${NC}" 
-    echo "  3. Switch back: ${BLUE}git checkout $branch${NC}"
-    echo "  4. Rebase on dev: ${BLUE}git rebase dev${NC}"
-    echo "  5. Rerun pr-ready: ${BLUE}./.tools/commands/pr-ready${NC}"
-    echo ""
-    echo -e "${INFO} Alternatively, merge dev into your branch:"
-    echo "  1. Merge dev: ${BLUE}git merge origin/dev${NC}"
-    echo "  2. Resolve any conflicts if they occur"
-    echo "  3. Rerun pr-ready: ${BLUE}./.tools/commands/pr-ready${NC}"
-    exit 1
-fi
-
-echo -e "${SUCCESS} Branch is up to date with dev"
-
 # Git Status Check
 echo -e "\n${WORKING} Checking git status..."
 git_status=$(git status --porcelain)
@@ -222,6 +164,28 @@ Co-Authored-By: opencode <noreply@opencode.ai>"
     
     git commit -m "$commit_message"
     echo -e "${SUCCESS} Remaining changes committed automatically"
+fi
+
+# Switch to appmancer account for GitHub operations BEFORE pushing
+echo -e "\n${WORKING} Setting up GitHub authentication for appmancer..."
+
+# Capture current GitHub CLI auth state before switching
+original_gh_user=$(gh auth status --hostname github.com 2>&1 | awk '/Active account: true/{print prev} {prev=$0}' | sed 's/.*account \([^ ]*\).*/\1/' || echo "")
+echo -e "${INFO} SSH Key Management: Detected original user: '$original_gh_user'"
+
+# Switch to appmancer account for GitHub CLI and ensure correct SSH remote
+# CRITICAL: NEVER CHANGE URL TO HTTPS - SSH AUTHENTICATION REQUIRED
+# The URL MUST remain SSH format (git@github.com:) for proper authentication
+gh auth switch --hostname github.com --user appmancer
+original_remote=$(git remote get-url origin)
+
+# Check if remote URL needs correction for appmancer SSH access
+correct_remote="git@github.com-personal:appmancer/FoxyPlayer.git"
+if [[ "$original_remote" != "$correct_remote" ]]; then
+    echo -e "${INFO} Correcting remote URL for appmancer SSH access..."
+    echo -e "${INFO} From: $original_remote"
+    echo -e "${INFO} To: $correct_remote"
+    git remote set-url origin "$correct_remote"
 fi
 
 # Push branch
@@ -313,7 +277,7 @@ if ! gh pr create --base dev --head "$branch" --title "$ticket_id: $ticket_title
         repo_url="https://github.com/$(git remote get-url origin | sed 's/.*github.com[:/]//' | sed 's/.git$//')"
         echo "  4. Create PR manually at: $repo_url/pull/new/$branch"
         echo "  5. After creating PR manually, update workflow state:"
-        echo "     jq '.phase = \"pr-created\" | .pr_url = \"YOUR_PR_URL\"' .tmp/current-ticket.json > tmp && mv tmp .tmp/current-ticket.json"
+        echo "     jq '.phase = \"pr-created\" | .pr_url = \"YOUR_PR_URL\"' .spectrum/current-ticket.json > tmp && mv tmp .spectrum/current-ticket.json"
         echo ""
         echo -e "${INFO} Quality gates passed - branch is ready for PR creation"
         exit 1
@@ -332,8 +296,8 @@ jq '.phase = "pr-created" | .pr_created_at = now | .pr_created_at |= todate | .p
    --arg url "$pr_url" \
    --arg files "$files_changed" \
    --arg tests "$test_passed" \
-   .tmp/current-ticket.json > .tmp/current-ticket.json.tmp
-mv .tmp/current-ticket.json.tmp .tmp/current-ticket.json
+   .spectrum/current-ticket.json > .spectrum/current-ticket.json.tmp
+mv .spectrum/current-ticket.json.tmp .spectrum/current-ticket.json
 
 # Restore original remote URL only if we changed it
 if [[ "$original_remote" != "$correct_remote" ]]; then
@@ -357,10 +321,15 @@ echo "  🧪 Tests: $test_passed/$test_total passing"
 echo "  🔄 TDD Cycles: $tdd_cycles completed"
 echo "  📁 Files: $files_changed changed (+$insertions -$deletions)"
 echo ""
+echo -e "${INFO} ${GREEN}Automatically starting PR monitoring...${NC}"
 echo ""
-echo -e "${INFO} ${YELLOW}Next Steps:${NC}"
-echo "  1. 👁️ Monitor: ./.tools/commands/pr-monitor (monitor PR feedback)"
-echo "  2. 🧹 After merge: ./.tools/commands/pr-cleanup"
+
+# Automatically start PR monitoring
+./.spectrum-dev/spectrum-dev pr-monitor
+
+echo ""
+echo -e "${INFO} ${YELLOW}Phase 3 (after merge):${NC}"
+echo "  1. 🧹 Clean up: ./.spectrum-dev/spectrum-dev pr-cleanup (after PR merged)"
 echo ""
 echo -e "${YELLOW} 🛡️ Branch Protection: PR correctly targets 'dev' branch (staging deployment)${NC}"
 echo -e "${INFO} 🎯 Quality Assurance: Pre-commit hooks will continue enforcing standards"

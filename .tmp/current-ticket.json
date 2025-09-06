@@ -1,0 +1,7 @@
+{
+  "ticket": "AID-6",
+  "title": "Setup AGENTS.md and .gitignore", 
+  "domain": "setup",
+  "branch": "feature/AID-6-setup-agents-gitignore",
+  "phase": "implementation"
+}

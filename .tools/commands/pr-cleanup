@@ -240,6 +240,33 @@ echo -e "${SUCCESS} ✅ Only workflow state, branches, and documentation were ma
 echo -e "${SUCCESS} ✅ Development environment remains intact"
 
 echo -e "\n${SUCCESS} ${GREEN}PR CLEANUP COMPLETED SUCCESSFULLY${NC}"
+
+# Switch back to Sam-3Degrees GitHub authentication for regular work
+echo -e "\n${WORKING} Restoring original GitHub authentication..."
+
+# Restore GitHub CLI to original user (Sam-3Degrees)
+# This reverses the authentication switch made in pr-ready
+echo -e "${INFO} SSH Key Management: Restoring GitHub CLI to Sam-3Degrees"
+if gh auth switch --user Sam-3Degrees 2>/dev/null; then
+    echo -e "${SUCCESS} Switched back to Sam-3Degrees GitHub account"
+else
+    echo -e "${YELLOW} Warning: Could not switch to Sam-3Degrees account"
+    echo -e "${INFO} Authentication may need manual adjustment"
+fi
+
+# Ensure remote URL is correct for Sam-3Degrees (should already be correct from pr-ready restoration)
+current_remote=$(git remote get-url origin)
+expected_remote="git@github.com:appmancer/aide.git"
+if [[ "$current_remote" != "$expected_remote" ]]; then
+    echo -e "${INFO} Correcting remote URL for Sam-3Degrees SSH access..."
+    echo -e "${INFO} From: $current_remote"
+    echo -e "${INFO} To: $expected_remote"
+    git remote set-url origin "$expected_remote"
+    echo -e "${SUCCESS} Remote URL corrected for Sam-3Degrees authentication"
+else
+    echo -e "${SUCCESS} Remote URL already correct for Sam-3Degrees authentication"
+fi
+
 echo -e "${INFO} Summary:"
 echo "  📋 Ticket: $ticket_id - $ticket_title"
 echo "  🔀 PR: $pr_url (merged)"

@@ -174,16 +174,6 @@ Use `@Agent-Name` in Slack to get their attention:
 
 **NEVER target `main` branch directly** - this bypasses our staging workflow and can disrupt production deployments.
 
-### Git Repository URL Policy
-
-**CRITICAL**: NEVER change the repository URL from SSH to HTTPS.
-
-- **Repository URL**: `git@github.com:appmancer/aide.git` (SSH format)
-- **Authentication switching**: Switch to 'appmancer' auth in `pr-ready`, return to 'Sam-3Degrees' in `pr-cleanup`
-- **NEVER use**: `https://github.com/appmancer/aide.git` or any HTTPS format
-
-**This is a firm requirement** - changing to HTTPS will break the authentication workflow and disrupt development processes.
-
 ### Command Line Tools
 
 Use `yq`to edit yaml files. Only attempt a direct edit as a last resort.
