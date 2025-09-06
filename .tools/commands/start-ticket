@@ -1,5 +1,9 @@
 #!/bin/bash
+<<<<<<< HEAD
 # start-ticket command for Spectrum Development Framework  
+=======
+# start-ticket command for Spectrum Development Framework
+>>>>>>> origin/dev
 # Phase 2: Clean Implementation After Context Reset
 # Purpose: Read ticket info from discover-ticket, set up workspace, begin focused implementation
 
@@ -72,6 +76,7 @@ fi
 echo -e "${SUCCESS} Ready to proceed with ticket: ${BLUE}$ticket_id${NC} - $ticket_title"
 echo -e "${SUCCESS} Using ticket file: $downloaded_file ($(wc -l < "$downloaded_file") lines)"
 
+<<<<<<< HEAD
 # Project type detection function
 detect_project_type() {
     local ticket_file="$1"
@@ -179,10 +184,77 @@ EOF
     mkdir -p src
 
     echo -e "${SUCCESS} TypeScript project initialized"
+=======
+# Domain detection function for AI agents - no interactive prompts
+detect_domain() {
+    local ticket_file="$1"
+    local ticket_content=$(cat "$ticket_file" | tr '[:upper:]' '[:lower:]')
+    
+    # Check ticket content for domain keywords
+    if echo "$ticket_content" | grep -q -E "(bruno|api test|integration test|test groups|test reorganization|test consolidation)"; then
+        if [[ -d "bruno" ]]; then
+            echo "bruno"
+            return 0
+        fi
+    elif echo "$ticket_content" | grep -q -E "(lambda|aws lambda|projection|event sourcing)"; then
+        if [[ -d "src/Centro.Core/Lambda" ]]; then
+            echo "src/Centro.Core/Lambda"
+            return 0
+        fi
+    elif echo "$ticket_content" | grep -q -E "(balance|account|currency)"; then
+        if [[ -d "src/Centro.Core/Balance" ]]; then
+            echo "src/Centro.Core/Balance"
+            return 0
+        fi
+    elif echo "$ticket_content" | grep -q -E "(quote|pricing|rate)"; then
+        if [[ -d "src/Centro.Core/Quote" ]]; then
+            echo "src/Centro.Core/Quote"
+            return 0
+        fi
+    elif echo "$ticket_content" | grep -q -E "(payout|payment|transfer)"; then
+        if [[ -d "src/Centro.Core/Payout" ]]; then
+            echo "src/Centro.Core/Payout"
+            return 0
+        fi
+    elif echo "$ticket_content" | grep -q -E "(api|controller|endpoint)"; then
+        if [[ -d "src/Centro.Api" ]]; then
+            echo "src/Centro.Api"
+            return 0
+        fi
+    elif echo "$ticket_content" | grep -q -E "(infrastructure|aws|deployment)"; then
+        if [[ -d "src/Centro.Infrastructure" ]]; then
+            echo "src/Centro.Infrastructure"
+            return 0
+        fi
+    fi
+    
+    # Return error - let AI agent decide
+    return 1
+}
+
+# Validate domain exists or create it
+ensure_domain_exists() {
+    local domain_path="$1"
+    if [[ ! -d "$domain_path" ]]; then
+        echo -e "${WORKING} Creating domain folder: $domain_path"
+        mkdir -p "$domain_path"
+        
+        # Create tickets subfolder for future archival
+        if [[ "$domain_path" == src/* ]]; then
+            mkdir -p "$domain_path/tickets"
+        elif [[ "$domain_path" == "bruno" ]]; then
+            mkdir -p "$domain_path/tickets"
+        fi
+    elif [[ "$domain_path" == "bruno" && ! -d "$domain_path/tickets" ]]; then
+        # Ensure tickets subfolder exists for bruno
+        mkdir -p "$domain_path/tickets"
+    fi
+>>>>>>> origin/dev
 }
 
 # Domain detection and workspace setup
 echo -e "\n${FOLDER} Step 1: Setting up ticket workspace..."
+<<<<<<< HEAD
 echo -e "${INFO} ${YELLOW}Detecting project type for ticket...${NC}"
 
 project_type=$(detect_project_type "$downloaded_file")
@@ -206,6 +278,44 @@ clean_title=$(echo "$ticket_title" | tr ' ' '-' | tr '[:upper:]' '[:lower:]' | s
 ticket_doc_path="tickets/$ticket_id-$clean_title.md"
 
 # Copy complete ticket file to tickets folder
+=======
+echo -e "${INFO} ${YELLOW}Detecting appropriate domain for ticket...${NC}"
+
+if domain_folder=$(detect_domain "$downloaded_file"); then
+    echo -e "${SUCCESS} Auto-detected domain: $domain_folder"
+    domain=$(basename "$domain_folder")
+    base_path=$(dirname "$domain_folder")
+else
+    echo -e "${ERROR} Could not auto-detect domain for this ticket"
+    echo -e "${INFO} Available domains found in codebase:"
+    find src/ -type d -name "Centro.*" | grep -v bin | grep -v obj | sort | sed 's/^/  - /'
+    echo -e "  - tickets/ (fallback)"
+    echo ""
+    echo -e "${ERROR} ${RED}AI AGENT ACTION REQUIRED:${NC}"
+    echo -e "${INFO} Please examine the ticket content and choose the appropriate domain:"
+    echo -e "${INFO} 1. Move the ticket file to the correct domain folder manually"
+    echo -e "${INFO} 2. Update the workflow state to reflect the correct domain"
+    echo -e "${INFO} 3. Re-run start-ticket, or continue with current setup"
+    echo ""
+    echo -e "${YELLOW} Proceeding with fallback domain 'tickets' for now...${NC}"
+    
+    domain="tickets"
+    base_path="."
+    domain_folder="$base_path/$domain"
+fi
+
+# Ensure domain exists
+ensure_domain_exists "$domain_folder"
+
+# Step 2: Copy ticket to domain folder
+echo -e "\n${FOLDER} Step 2: Creating ticket documentation..."
+
+# Create clean filename
+clean_title=$(echo "$ticket_title" | tr ' ' '-' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-zA-Z0-9-]//g')
+ticket_doc_path="$domain_folder/$ticket_id-$clean_title.md"
+
+# Copy complete ticket file to domain folder
+>>>>>>> origin/dev
 cp "$downloaded_file" "$ticket_doc_path"
 echo -e "${SUCCESS} Created complete ticket documentation: $ticket_doc_path"
 
@@ -245,8 +355,14 @@ fi
 # Pull latest from dev branch to ensure we have the most recent changes
 echo -e "${WORKING} Pulling latest changes from origin/$target_branch..."
 git pull origin "$target_branch" || {
+<<<<<<< HEAD
     echo -e "${YELLOW} Warning: Could not pull from origin/$target_branch (offline or no remote?)"
     echo -e "${INFO} Continuing with local dev branch..."
+=======
+    echo -e "${ERROR} Failed to pull latest $target_branch"
+    echo -e "${INFO} Please check your network connection and remote access"
+    exit 1
+>>>>>>> origin/dev
 }
 
 # Create feature branch
@@ -267,7 +383,13 @@ cat > .tmp/current-ticket.json << EOF
 {
   "ticket": "$ticket_id",
   "title": "$ticket_title",
+<<<<<<< HEAD
   "project_type": "$project_type",
+=======
+  "domain": "$domain",
+  "base_path": "$base_path",
+  "domain_folder": "$domain_folder",
+>>>>>>> origin/dev
   "ticket_doc_path": "$ticket_doc_path",
   "branch": "$branch_name",
   "phase": "started",
@@ -282,7 +404,11 @@ echo -e "${SUCCESS} Workflow state saved to .tmp/current-ticket.json"
 echo -e "\n${SUCCESS} Ticket workflow initialized successfully!"
 echo -e "${INFO} Summary:"
 echo "  Ticket: $ticket_id - $ticket_title"
+<<<<<<< HEAD
 echo "  Project Type: $project_type"
+=======
+echo "  Domain: $domain ($base_path)"
+>>>>>>> origin/dev
 echo "  Documentation: $ticket_doc_path"
 echo "  Branch: $branch_name"
 echo "  Complete ticket details: $(wc -l < "$ticket_doc_path") lines"
@@ -290,6 +416,7 @@ echo ""
 echo -e "${INFO} Next steps:"
 echo "  1. Review complete ticket requirements in $ticket_doc_path"
 echo "  2. Begin implementation work based on ticket requirements"
+<<<<<<< HEAD
 if [[ "$project_type" == "typescript" ]]; then
     echo "  3. Use TDD commands: .tools/spectrum-dev tdd-red, tdd-green, tdd-refactor"
     echo "  4. Install dependencies: npm install"
@@ -303,3 +430,12 @@ echo "  5. Use pr-ready when implementation is complete"
 echo -e "${INFO} Cleaning up temporary discovery files..."
 rm -f "$downloaded_file"
 rm -f "$TICKET_INFO_FILE"
+=======
+echo "  3. Use TDD approach if applicable: write tests first, then implementation"
+echo "  4. Commit work regularly and push feature branch when ready"
+
+# Clean up discovered temp files unconditionally - they've been copied to domain folder
+echo -e "${INFO} Cleaning up temporary discovery files..."
+rm -f "$downloaded_file"
+rm -f "$TICKET_INFO_FILE"
+>>>>>>> origin/dev
