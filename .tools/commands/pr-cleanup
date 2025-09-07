@@ -283,40 +283,34 @@ fi
 
 # Restore GitHub CLI authentication
 echo -e "\n${WORKING} Restoring GitHub CLI authentication to Sam-3Degrees..."
-gh_config_dir="$HOME/.config/gh"
 
-# Restore GitHub CLI auth from backup if available
-if [[ -f "$gh_config_dir/hosts.yml.backup.spectrum" ]]; then
-    mv "$gh_config_dir/hosts.yml.backup.spectrum" "$gh_config_dir/hosts.yml" 2>/dev/null || true
-    echo -e "${SUCCESS} GitHub CLI config restored from backup"
-else
-    echo -e "${YELLOW} No GitHub CLI backup found"
-fi
-
-# Clear any appmancer environment token
-if [[ -n "${GITHUB_TOKEN_APPMANCER:-}" ]]; then
-    echo -e "${WORKING} Clearing appmancer GitHub token from environment..."
-    unset GITHUB_TOKEN
-    echo -e "${SUCCESS} Appmancer token cleared"
-fi
-
-# Check current GitHub CLI auth
+# Check current GitHub CLI auth and switch back to Sam-3Degrees
 if command -v gh >/dev/null 2>&1; then
     current_user=$(gh api user --jq '.login' 2>/dev/null || echo "unknown")
     echo -e "${INFO} Current GitHub CLI user: $current_user"
     
-    if [[ "$current_user" == "Sam-3Degrees" ]]; then
-        echo -e "${SUCCESS} GitHub CLI successfully restored to Sam-3Degrees"
-    elif [[ "$current_user" == "appmancer" ]]; then
-        echo -e "${YELLOW} GitHub CLI still authenticated as appmancer"
-        echo -e "${INFO} ${BLUE}Manual GitHub CLI auth switch needed:${NC}"
-        echo "  1. Run: ${BLUE}gh auth logout${NC}"
-        echo "  2. Run: ${BLUE}gh auth login${NC}"
-        echo "  3. Choose 'GitHub.com' and 'HTTPS'"
-        echo "  4. Authenticate as 'Sam-3Degrees' user"
+    if [[ "$current_user" != "Sam-3Degrees" ]]; then
+        echo -e "${WORKING} Switching GitHub CLI back to Sam-3Degrees account..."
+        
+        # Switch back to Sam-3Degrees account
+        if gh auth switch --user Sam-3Degrees 2>/dev/null; then
+            echo -e "${SUCCESS} Successfully switched GitHub CLI to Sam-3Degrees"
+            
+            # Verify the switch worked
+            new_user=$(gh api user --jq '.login' 2>/dev/null || echo "unknown")
+            if [[ "$new_user" == "Sam-3Degrees" ]]; then
+                echo -e "${SUCCESS} GitHub CLI now authenticated as 'Sam-3Degrees'"
+            else
+                echo -e "${YELLOW} GitHub CLI switch may have failed (current user: $new_user)"
+            fi
+        else
+            echo -e "${YELLOW} Could not switch to Sam-3Degrees account"
+            echo -e "${INFO} ${BLUE}Manual GitHub CLI auth switch needed:${NC}"
+            echo "  1. Run: ${BLUE}gh auth switch --user Sam-3Degrees${NC}"
+            echo "  2. Or run: ${BLUE}gh auth login${NC} and authenticate as 'Sam-3Degrees'"
+        fi
     else
-        echo -e "${YELLOW} GitHub CLI authentication status unknown"
-        echo -e "${INFO} May need to re-authenticate: ${BLUE}gh auth login${NC}"
+        echo -e "${SUCCESS} GitHub CLI already authenticated as 'Sam-3Degrees'"
     fi
 else
     echo -e "${YELLOW} GitHub CLI not available"
