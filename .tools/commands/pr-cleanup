@@ -241,7 +241,7 @@ echo -e "${SUCCESS} ✅ Development environment remains intact"
 
 # Authentication Switch Back
 echo -e "\n${WORKING} Switching back to 'Sam-3Degrees' authentication..."
-echo -e "${INFO} ${YELLOW}IMPORTANT: Restoring GitHub SSH authentication${NC}"
+echo -e "${INFO} ${YELLOW}IMPORTANT: Restoring GitHub SSH and CLI authentication${NC}"
 echo ""
 
 # Restore SSH config from backup
@@ -270,18 +270,60 @@ fi
 echo -e "${WORKING} Adding Sam-3Degrees SSH key..."
 ssh-add ~/.ssh/id_ed25519_sam_3degrees 2>/dev/null || echo -e "${YELLOW} SSH key already loaded"
 
-# Test GitHub connection
-echo -e "${WORKING} Testing GitHub connection..."
+# Test GitHub SSH connection
+echo -e "${WORKING} Testing GitHub SSH connection..."
 ssh_test=$(ssh -T git@github.com 2>&1 || true)
 if echo "$ssh_test" | grep -q "Sam-3Degrees"; then
-    echo -e "${SUCCESS} Successfully authenticated as 'Sam-3Degrees' - normal development authentication restored"
+    echo -e "${SUCCESS} Successfully authenticated as 'Sam-3Degrees' via SSH"
 elif echo "$ssh_test" | grep -q "appmancer"; then
-    echo -e "${YELLOW} Still authenticated as 'appmancer' - manual key switch may be needed"
+    echo -e "${YELLOW} Still authenticated as 'appmancer' via SSH - manual key switch may be needed"
 else
-    echo -e "${YELLOW} Could not determine GitHub authentication status"
+    echo -e "${YELLOW} Could not determine GitHub SSH authentication status"
 fi
 
-echo -e "${INFO} ${GREEN}Development authentication restored${NC}"
+# Restore GitHub CLI authentication
+echo -e "\n${WORKING} Restoring GitHub CLI authentication to Sam-3Degrees..."
+gh_config_dir="$HOME/.config/gh"
+
+# Restore GitHub CLI auth from backup if available
+if [[ -f "$gh_config_dir/hosts.yml.backup.spectrum" ]]; then
+    mv "$gh_config_dir/hosts.yml.backup.spectrum" "$gh_config_dir/hosts.yml" 2>/dev/null || true
+    echo -e "${SUCCESS} GitHub CLI config restored from backup"
+else
+    echo -e "${YELLOW} No GitHub CLI backup found"
+fi
+
+# Clear any appmancer environment token
+if [[ -n "${GITHUB_TOKEN_APPMANCER:-}" ]]; then
+    echo -e "${WORKING} Clearing appmancer GitHub token from environment..."
+    unset GITHUB_TOKEN
+    echo -e "${SUCCESS} Appmancer token cleared"
+fi
+
+# Check current GitHub CLI auth
+if command -v gh >/dev/null 2>&1; then
+    current_user=$(gh api user --jq '.login' 2>/dev/null || echo "unknown")
+    echo -e "${INFO} Current GitHub CLI user: $current_user"
+    
+    if [[ "$current_user" == "Sam-3Degrees" ]]; then
+        echo -e "${SUCCESS} GitHub CLI successfully restored to Sam-3Degrees"
+    elif [[ "$current_user" == "appmancer" ]]; then
+        echo -e "${YELLOW} GitHub CLI still authenticated as appmancer"
+        echo -e "${INFO} ${BLUE}Manual GitHub CLI auth switch needed:${NC}"
+        echo "  1. Run: ${BLUE}gh auth logout${NC}"
+        echo "  2. Run: ${BLUE}gh auth login${NC}"
+        echo "  3. Choose 'GitHub.com' and 'HTTPS'"
+        echo "  4. Authenticate as 'Sam-3Degrees' user"
+    else
+        echo -e "${YELLOW} GitHub CLI authentication status unknown"
+        echo -e "${INFO} May need to re-authenticate: ${BLUE}gh auth login${NC}"
+    fi
+else
+    echo -e "${YELLOW} GitHub CLI not available"
+fi
+
+echo -e "\n${SUCCESS} ${GREEN}Development authentication restored${NC}"
+echo -e "${INFO} Both SSH and GitHub CLI should now be configured for Sam-3Degrees"
 
 echo -e "\n${SUCCESS} ${GREEN}PR CLEANUP COMPLETED SUCCESSFULLY${NC}"
 echo -e "${INFO} Summary:"
