@@ -241,31 +241,42 @@ echo -e "${SUCCESS} ✅ Development environment remains intact"
 
 # Authentication Switch Back
 echo -e "\n${WORKING} Switching back to 'Sam-3Degrees' authentication..."
-echo -e "${INFO} ${YELLOW}IMPORTANT: Attempting to switch GitHub SSH authentication back${NC}"
+echo -e "${INFO} ${YELLOW}IMPORTANT: Restoring GitHub SSH authentication${NC}"
 echo ""
 
-# Attempt to switch back to Sam-3Degrees SSH key automatically
-echo -e "${WORKING} Attempting to add Sam-3Degrees SSH key..."
-if ssh-add ~/.ssh/sam_3degrees_key 2>/dev/null; then
-    echo -e "${SUCCESS} Successfully added Sam-3Degrees SSH key"
-elif ssh-add ~/.ssh/id_rsa 2>/dev/null; then
-    echo -e "${SUCCESS} Successfully added default SSH key (id_rsa)"
+# Restore SSH config from backup
+echo -e "${WORKING} Restoring SSH config for Sam-3Degrees access..."
+if [[ -f ~/.ssh/config.backup.spectrum ]]; then
+    mv ~/.ssh/config.backup.spectrum ~/.ssh/config
+    echo -e "${SUCCESS} SSH config restored from backup"
 else
-    echo -e "${YELLOW} Could not automatically add Sam-3Degrees SSH key"
-    echo -e "${INFO} ${BLUE}Manual authentication switch may be needed:${NC}"
-    echo "  1. Switch SSH key: ${BLUE}ssh-add ~/.ssh/sam_3degrees_key${NC}"
-    echo "  2. Test connection: ${BLUE}ssh -T git@github.com${NC}"
-    echo ""
+    echo -e "${YELLOW} No backup found, manually restoring SSH config..."
+    # Recreate the original config if backup is missing
+    cat > ~/.ssh/config << 'EOF'
+Host github.com-personal
+   HostName github.com
+   User git
+   IdentityFile ~/.ssh/id_ed25519
+
+Host github.com
+   HostName github.com
+   User git
+   IdentityFile ~/.ssh/id_ed25519_sam_3degrees
+EOF
+    echo -e "${SUCCESS} SSH config recreated for Sam-3Degrees"
 fi
+
+# Add Sam-3Degrees SSH key
+echo -e "${WORKING} Adding Sam-3Degrees SSH key..."
+ssh-add ~/.ssh/id_ed25519_sam_3degrees 2>/dev/null || echo -e "${YELLOW} SSH key already loaded"
 
 # Test GitHub connection
 echo -e "${WORKING} Testing GitHub connection..."
 ssh_test=$(ssh -T git@github.com 2>&1 || true)
 if echo "$ssh_test" | grep -q "Sam-3Degrees"; then
-    echo -e "${SUCCESS} Authenticated as 'Sam-3Degrees' - normal development authentication restored"
+    echo -e "${SUCCESS} Successfully authenticated as 'Sam-3Degrees' - normal development authentication restored"
 elif echo "$ssh_test" | grep -q "appmancer"; then
-    echo -e "${YELLOW} Still authenticated as 'appmancer'"
-    echo -e "${INFO} May need manual key switch for normal development"
+    echo -e "${YELLOW} Still authenticated as 'appmancer' - manual key switch may be needed"
 else
     echo -e "${YELLOW} Could not determine GitHub authentication status"
 fi
