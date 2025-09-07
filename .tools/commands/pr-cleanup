@@ -239,6 +239,86 @@ echo -e "${SUCCESS} ✅ No working directories (.tools/, .centro-dev/, src/) wer
 echo -e "${SUCCESS} ✅ Only workflow state, branches, and documentation were managed"
 echo -e "${SUCCESS} ✅ Development environment remains intact"
 
+# Authentication Switch Back
+echo -e "\n${WORKING} Switching back to 'Sam-3Degrees' authentication..."
+echo -e "${INFO} ${YELLOW}IMPORTANT: Restoring GitHub SSH and CLI authentication${NC}"
+echo ""
+
+# Restore SSH config from backup
+echo -e "${WORKING} Restoring SSH config for Sam-3Degrees access..."
+if [[ -f ~/.ssh/config.backup.spectrum ]]; then
+    mv ~/.ssh/config.backup.spectrum ~/.ssh/config
+    echo -e "${SUCCESS} SSH config restored from backup"
+else
+    echo -e "${YELLOW} No backup found, manually restoring SSH config..."
+    # Recreate the original config if backup is missing
+    cat > ~/.ssh/config << 'EOF'
+Host github.com-personal
+   HostName github.com
+   User git
+   IdentityFile ~/.ssh/id_ed25519
+
+Host github.com
+   HostName github.com
+   User git
+   IdentityFile ~/.ssh/id_ed25519_sam_3degrees
+EOF
+    echo -e "${SUCCESS} SSH config recreated for Sam-3Degrees"
+fi
+
+# Add Sam-3Degrees SSH key
+echo -e "${WORKING} Adding Sam-3Degrees SSH key..."
+ssh-add ~/.ssh/id_ed25519_sam_3degrees 2>/dev/null || echo -e "${YELLOW} SSH key already loaded"
+
+# Test GitHub SSH connection
+echo -e "${WORKING} Testing GitHub SSH connection..."
+ssh_test=$(ssh -T git@github.com 2>&1 || true)
+if echo "$ssh_test" | grep -q "Sam-3Degrees"; then
+    echo -e "${SUCCESS} Successfully authenticated as 'Sam-3Degrees' via SSH"
+elif echo "$ssh_test" | grep -q "appmancer"; then
+    echo -e "${YELLOW} Still authenticated as 'appmancer' via SSH - manual key switch may be needed"
+else
+    echo -e "${YELLOW} Could not determine GitHub SSH authentication status"
+fi
+
+# Restore GitHub CLI authentication
+echo -e "\n${WORKING} Restoring GitHub CLI authentication to Sam-3Degrees..."
+
+# Check current GitHub CLI auth and switch back to Sam-3Degrees
+if command -v gh >/dev/null 2>&1; then
+    current_user=$(gh api user --jq '.login' 2>/dev/null || echo "unknown")
+    echo -e "${INFO} Current GitHub CLI user: $current_user"
+    
+    if [[ "$current_user" != "Sam-3Degrees" ]]; then
+        echo -e "${WORKING} Switching GitHub CLI back to Sam-3Degrees account..."
+        
+        # Switch back to Sam-3Degrees account
+        if gh auth switch --user Sam-3Degrees 2>/dev/null; then
+            echo -e "${SUCCESS} Successfully switched GitHub CLI to Sam-3Degrees"
+            
+            # Verify the switch worked
+            new_user=$(gh api user --jq '.login' 2>/dev/null || echo "unknown")
+            if [[ "$new_user" == "Sam-3Degrees" ]]; then
+                echo -e "${SUCCESS} GitHub CLI now authenticated as 'Sam-3Degrees'"
+            else
+                echo -e "${YELLOW} GitHub CLI switch may have failed (current user: $new_user)"
+            fi
+        else
+            echo -e "${YELLOW} Could not switch to Sam-3Degrees account"
+            echo -e "${INFO} ${BLUE}Manual GitHub CLI auth switch needed:${NC}"
+            echo "  1. Run: ${BLUE}gh auth switch --user Sam-3Degrees${NC}"
+            echo "  2. Or run: ${BLUE}gh auth login${NC} and authenticate as 'Sam-3Degrees'"
+        fi
+    else
+        echo -e "${SUCCESS} GitHub CLI already authenticated as 'Sam-3Degrees'"
+    fi
+else
+    echo -e "${YELLOW} GitHub CLI not available"
+fi
+
+echo -e "\n${SUCCESS} ${GREEN}Development authentication restored${NC}"
+echo -e "${INFO} Both SSH and GitHub CLI should now be configured for Sam-3Degrees"
+
 echo -e "\n${SUCCESS} ${GREEN}PR CLEANUP COMPLETED SUCCESSFULLY${NC}"
 echo -e "${INFO} Summary:"
 echo "  📋 Ticket: $ticket_id - $ticket_title"

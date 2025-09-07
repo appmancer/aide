@@ -60,12 +60,20 @@ fi
 echo -e "${WORKING} Searching for my ticket assignments..."
 
 # Get my agent name and user ID for filtering
+<<<<<<< HEAD
+my_agent_name=$(python3 .tools/slack_rest_client.py detect_agent | jq -r '.agent_name // "Agent Blue"' 2>/dev/null || echo "Agent Blue")
+=======
 my_agent_name=$(python3 .tools/slack_rest_client.py detect_agent | jq -r '.agent_name // "Agent Red"' 2>/dev/null || echo "Agent Red")
+>>>>>>> origin/dev
 my_user_id=$(python3 .tools/slack_rest_client.py get_relevant_messages 1 | jq -r '.bot_user_id // empty' 2>/dev/null)
 
 # If we didn't get a user ID from the API, try to detect it from recent messages
 if [[ -z "$my_user_id" ]]; then
+<<<<<<< HEAD
+    my_user_id=$(jq -r '.result.messages[] | select(.user_name == "Agent Blue") | .user_id' "$SPECTRUM_TMP_DIR/slack_messages.json" 2>/dev/null | head -n 1)
+=======
     my_user_id=$(jq -r '.result.messages[] | select(.user_name == "Agent Red") | .user_id' "$SPECTRUM_TMP_DIR/slack_messages.json" 2>/dev/null | head -n 1)
+>>>>>>> origin/dev
 fi
 
 echo -e "${INFO} Agent: $my_agent_name (ID: $my_user_id)"
@@ -218,7 +226,11 @@ cat > "$TICKET_INFO_FILE" << EOF
   "ticket_file": "$ticket_file_path",
   "ticket_type": "$ticket_type",
   "discovered_at": "$(date -Iseconds)",
+<<<<<<< HEAD
+  "discovered_by": "Agent Blue"
+=======
   "discovered_by": "Agent Red"
+>>>>>>> origin/dev
 }
 EOF
 
