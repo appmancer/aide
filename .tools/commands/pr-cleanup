@@ -239,6 +239,19 @@ echo -e "${SUCCESS} ✅ No working directories (.tools/, .centro-dev/, src/) wer
 echo -e "${SUCCESS} ✅ Only workflow state, branches, and documentation were managed"
 echo -e "${SUCCESS} ✅ Development environment remains intact"
 
+# Authentication Switch Back
+echo -e "\n${WORKING} Switching back to 'Sam-3Degrees' authentication..."
+echo -e "${INFO} ${YELLOW}IMPORTANT: Switching GitHub SSH authentication back${NC}"
+echo ""
+echo -e "${INFO} ${BLUE}Please run these commands to switch back to Sam-3Degrees:${NC}"
+echo "  1. Switch SSH key: ${BLUE}ssh-add ~/.ssh/sam_3degrees_key${NC}"
+echo "  2. Test connection: ${BLUE}ssh -T git@github.com${NC}"
+echo "  3. Should see: 'Hi Sam-3Degrees! You've successfully authenticated'"
+echo ""
+echo -e "${INFO} ${GREEN}This restores your normal development authentication${NC}"
+echo ""
+read -p "Press Enter after switching back to 'Sam-3Degrees' authentication..."
+
 echo -e "\n${SUCCESS} ${GREEN}PR CLEANUP COMPLETED SUCCESSFULLY${NC}"
 echo -e "${INFO} Summary:"
 echo "  📋 Ticket: $ticket_id - $ticket_title"
