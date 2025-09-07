@@ -241,16 +241,36 @@ echo -e "${SUCCESS} ✅ Development environment remains intact"
 
 # Authentication Switch Back
 echo -e "\n${WORKING} Switching back to 'Sam-3Degrees' authentication..."
-echo -e "${INFO} ${YELLOW}IMPORTANT: Switching GitHub SSH authentication back${NC}"
+echo -e "${INFO} ${YELLOW}IMPORTANT: Attempting to switch GitHub SSH authentication back${NC}"
 echo ""
-echo -e "${INFO} ${BLUE}Please run these commands to switch back to Sam-3Degrees:${NC}"
-echo "  1. Switch SSH key: ${BLUE}ssh-add ~/.ssh/sam_3degrees_key${NC}"
-echo "  2. Test connection: ${BLUE}ssh -T git@github.com${NC}"
-echo "  3. Should see: 'Hi Sam-3Degrees! You've successfully authenticated'"
-echo ""
-echo -e "${INFO} ${GREEN}This restores your normal development authentication${NC}"
-echo ""
-read -p "Press Enter after switching back to 'Sam-3Degrees' authentication..."
+
+# Attempt to switch back to Sam-3Degrees SSH key automatically
+echo -e "${WORKING} Attempting to add Sam-3Degrees SSH key..."
+if ssh-add ~/.ssh/sam_3degrees_key 2>/dev/null; then
+    echo -e "${SUCCESS} Successfully added Sam-3Degrees SSH key"
+elif ssh-add ~/.ssh/id_rsa 2>/dev/null; then
+    echo -e "${SUCCESS} Successfully added default SSH key (id_rsa)"
+else
+    echo -e "${YELLOW} Could not automatically add Sam-3Degrees SSH key"
+    echo -e "${INFO} ${BLUE}Manual authentication switch may be needed:${NC}"
+    echo "  1. Switch SSH key: ${BLUE}ssh-add ~/.ssh/sam_3degrees_key${NC}"
+    echo "  2. Test connection: ${BLUE}ssh -T git@github.com${NC}"
+    echo ""
+fi
+
+# Test GitHub connection
+echo -e "${WORKING} Testing GitHub connection..."
+ssh_test=$(ssh -T git@github.com 2>&1 || true)
+if echo "$ssh_test" | grep -q "Sam-3Degrees"; then
+    echo -e "${SUCCESS} Authenticated as 'Sam-3Degrees' - normal development authentication restored"
+elif echo "$ssh_test" | grep -q "appmancer"; then
+    echo -e "${YELLOW} Still authenticated as 'appmancer'"
+    echo -e "${INFO} May need manual key switch for normal development"
+else
+    echo -e "${YELLOW} Could not determine GitHub authentication status"
+fi
+
+echo -e "${INFO} ${GREEN}Development authentication restored${NC}"
 
 echo -e "\n${SUCCESS} ${GREEN}PR CLEANUP COMPLETED SUCCESSFULLY${NC}"
 echo -e "${INFO} Summary:"
