@@ -23,7 +23,9 @@
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "ts-morph": "^20.0.0"
+  },
   "keywords": ["spectrum", "development"],
   "author": "Spectrum Development Team",
   "license": "ISC"
