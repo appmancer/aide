@@ -1,4 +1,4 @@
-import { Project, SourceFile, FunctionDeclaration, ClassDeclaration, InterfaceDeclaration } from 'ts-morph';
+import { Project, SourceFile, FunctionDeclaration, ClassDeclaration, InterfaceDeclaration, SyntaxKind } from 'ts-morph';
 
 export interface ParsedFunction {
   name: string;
@@ -129,11 +129,11 @@ export class TsMorphParser {
         declarations.forEach(declaration => {
           let type: 'function' | 'class' | 'interface' | 'variable' = 'variable';
           
-          if (declaration.getKind() === 262) { // SyntaxKind.FunctionDeclaration
+          if (declaration.getKind() === SyntaxKind.FunctionDeclaration) {
             type = 'function';
-          } else if (declaration.getKind() === 263) { // SyntaxKind.ClassDeclaration
+          } else if (declaration.getKind() === SyntaxKind.ClassDeclaration) {
             type = 'class';
-          } else if (declaration.getKind() === 264) { // SyntaxKind.InterfaceDeclaration
+          } else if (declaration.getKind() === SyntaxKind.InterfaceDeclaration) {
             type = 'interface';
           }
 
