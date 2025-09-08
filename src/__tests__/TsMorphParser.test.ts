@@ -23,7 +23,6 @@ describe('TsMorphParser', () => {
     it('should load TypeScript files from file system', () => {
       const parser = new TsMorphParser();
       
-      // Create a simple test file content
       const testCode = 'export const test = "hello";';
       const sourceFile = parser.createSourceFile('test.ts', testCode);
       
@@ -111,6 +110,33 @@ describe('TsMorphParser', () => {
       expect(interfaces[1].name).toBe('ApiResponse');
       expect(interfaces[1].isExported).toBe(true);
     });
+
+    it('should handle invalid TypeScript code gracefully', () => {
+      const parser = new TsMorphParser();
+      const invalidCode = 'this is not valid typescript code {{{';
+      
+      expect(() => {
+        parser.getFunctionDeclarations(invalidCode);
+      }).not.toThrow();
+      
+      expect(() => {
+        parser.getClassDeclarations(invalidCode);
+      }).not.toThrow();
+      
+      expect(() => {
+        parser.getInterfaceDeclarations(invalidCode);
+      }).not.toThrow();
+    });
+
+    it('should handle empty code gracefully', () => {
+      const parser = new TsMorphParser();
+      const emptyCode = '';
+      
+      expect(parser.getFunctionDeclarations(emptyCode)).toEqual([]);
+      expect(parser.getClassDeclarations(emptyCode)).toEqual([]);
+      expect(parser.getInterfaceDeclarations(emptyCode)).toEqual([]);
+      expect(parser.getExportedSymbols(emptyCode)).toEqual([]);
+    });
   });
 
   describe('Symbol analysis', () => {
@@ -131,6 +157,22 @@ describe('TsMorphParser', () => {
       expect(exports.map(e => e.name)).toContain('func');
       expect(exports.map(e => e.name)).toContain('Class');
       expect(exports.map(e => e.name)).toContain('Interface');
+    });
+  });
+
+  describe('Integration validation', () => {
+    it('should handle basic integration test', () => {
+      const parser = new TsMorphParser();
+      
+      const basicCode = `
+        export class Test {
+          method() {}
+        }
+      `;
+      
+      const classes = parser.getClassDeclarations(basicCode);
+      expect(classes).toHaveLength(1);
+      expect(classes[0].name).toBe('Test');
     });
   });
 });
