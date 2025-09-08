@@ -40,4 +40,97 @@ describe('TsMorphParser', () => {
       }).not.toThrow();
     });
   });
+
+  describe('AST parsing', () => {
+    it('should parse and extract function declarations', () => {
+      const parser = new TsMorphParser();
+      const testCode = `
+        export function testFunction(param: string): number {
+          return param.length;
+        }
+        
+        function internalFunction() {
+          return "internal";
+        }
+      `;
+      
+      const functions = parser.getFunctionDeclarations(testCode);
+      
+      expect(functions).toHaveLength(2);
+      expect(functions[0].name).toBe('testFunction');
+      expect(functions[0].isExported).toBe(true);
+      expect(functions[1].name).toBe('internalFunction');
+      expect(functions[1].isExported).toBe(false);
+    });
+
+    it('should parse and extract class declarations', () => {
+      const parser = new TsMorphParser();
+      const testCode = `
+        export class TestClass {
+          private value: string;
+          
+          constructor(value: string) {
+            this.value = value;
+          }
+          
+          public getValue(): string {
+            return this.value;
+          }
+        }
+      `;
+      
+      const classes = parser.getClassDeclarations(testCode);
+      
+      expect(classes).toHaveLength(1);
+      expect(classes[0].name).toBe('TestClass');
+      expect(classes[0].isExported).toBe(true);
+      expect(classes[0].methods).toHaveLength(1);
+      expect(classes[0].methods[0]).toBe('getValue');
+    });
+
+    it('should parse and extract interface declarations', () => {
+      const parser = new TsMorphParser();
+      const testCode = `
+        interface User {
+          id: number;
+          name: string;
+          email?: string;
+        }
+        
+        export interface ApiResponse<T> {
+          data: T;
+          status: number;
+        }
+      `;
+      
+      const interfaces = parser.getInterfaceDeclarations(testCode);
+      
+      expect(interfaces).toHaveLength(2);
+      expect(interfaces[0].name).toBe('User');
+      expect(interfaces[0].isExported).toBe(false);
+      expect(interfaces[1].name).toBe('ApiResponse');
+      expect(interfaces[1].isExported).toBe(true);
+    });
+  });
+
+  describe('Symbol analysis', () => {
+    it('should extract all exported symbols', () => {
+      const parser = new TsMorphParser();
+      const testCode = `
+        export const constant = 42;
+        export function func() {}
+        export class Class {}
+        export interface Interface {}
+        const internal = "private";
+      `;
+      
+      const exports = parser.getExportedSymbols(testCode);
+      
+      expect(exports).toHaveLength(4);
+      expect(exports.map(e => e.name)).toContain('constant');
+      expect(exports.map(e => e.name)).toContain('func');
+      expect(exports.map(e => e.name)).toContain('Class');
+      expect(exports.map(e => e.name)).toContain('Interface');
+    });
+  });
 });
