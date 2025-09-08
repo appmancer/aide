@@ -1,10 +1,10 @@
 {
-  "ticket": "AID-13",
-  "title": "LSP Client Implementation",
+  "ticket": "AID-12",
+  "title": "AIDE Project Setup",
   "project_type": "typescript",
-  "ticket_doc_path": "tickets/AID-13-lsp-client-implementation.md",
-  "branch": "feature/AID-13-lsp-client-implementation",
-  "phase": "started",
-  "created": "2025-09-06T19:07:29+01:00",
-  "source_file": "AID-13_LSP_Client_Implementation.md"
+  "ticket_doc_path": ".tmp/discovered-ticket-details.md",
+  "branch": "feature/AID-12-aide-project-setup-clean",
+  "phase": "ready-for-pr",
+  "created": "2025-09-07T22:17:34+01:00",
+  "source_file": ".tmp/discovered-ticket-details.md"
 }
