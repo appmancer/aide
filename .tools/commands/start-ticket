@@ -1,9 +1,5 @@
 #!/bin/bash
-<<<<<<< HEAD
-# start-ticket command for Spectrum Development Framework  
-=======
 # start-ticket command for Spectrum Development Framework
->>>>>>> origin/dev
 # Phase 2: Clean Implementation After Context Reset
 # Purpose: Read ticket info from discover-ticket, set up workspace, begin focused implementation
 
