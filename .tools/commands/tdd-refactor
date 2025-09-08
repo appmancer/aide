@@ -50,10 +50,10 @@ mv "$tdd_state_file.tmp" "$tdd_state_file"
 
 # Get list of files modified in this TDD cycle
 echo -e "\n${WORKING} Analyzing files modified in GREEN phase..."
-modified_files=$(git diff --name-only HEAD~1 2>/dev/null | grep "\.cs$" || true)
+modified_files=$(git diff --name-only HEAD~1 2>/dev/null | grep -E "\.(ts|tsx|js|jsx)$" || true)
 
 if [[ -z "$modified_files" ]]; then
-    echo -e "${INFO} No C# files modified in current cycle - skipping refactor"
+    echo -e "${INFO} No TypeScript/JavaScript files modified in current cycle - skipping refactor"
     jq '.phase = "refactor-skipped" | .refactor_completed = now | .refactor_completed |= todate' "$tdd_state_file" > "$tdd_state_file.tmp"
     mv "$tdd_state_file.tmp" "$tdd_state_file"
     echo -e "${SUCCESS} Refactor phase complete (no changes needed)"
@@ -71,7 +71,19 @@ rollback_needed=false
 # Helper function to validate tests still pass
 validate_tests() {
     echo -e "${TEST} Validating tests still pass..."
-    if dotnet test --no-build --verbosity quiet >/dev/null 2>&1; then
+    
+    # Determine test command
+    if [[ -f "package.json" ]] && grep -q '"test"' package.json; then
+        if [[ -f "yarn.lock" ]] && command -v yarn &> /dev/null; then
+            test_cmd="yarn test"
+        else
+            test_cmd="npm test"
+        fi
+    else
+        test_cmd="npx jest"
+    fi
+    
+    if $test_cmd --silent >/dev/null 2>&1; then
         echo -e "${SUCCESS} Tests pass"
         return 0
     else
@@ -90,34 +102,49 @@ rollback_changes() {
 
 echo -e "\n${REFACTOR} ${YELLOW}Priority 1: Style & Format${NC}"
 
-# Apply dotnet format whitespace
+# Apply Prettier/ESLint formatting
 echo -e "${WORKING} Applying automatic style fixes..."
-if dotnet format whitespace --verify-no-changes >/dev/null 2>&1; then
-    echo -e "${INFO} No style issues to fix"
-else
-    dotnet format whitespace >/dev/null 2>&1
+
+# Check for Prettier
+if [[ -f ".prettierrc" ]] || [[ -f ".prettierrc.json" ]] || [[ -f ".prettierrc.js" ]] || grep -q "prettier" package.json 2>/dev/null; then
+    prettier_issues=$(npx prettier --check $modified_files 2>&1 | wc -l)
+    if [[ $prettier_issues -gt 0 ]]; then
+        npx prettier --write $modified_files >/dev/null 2>&1
+        if validate_tests; then
+            echo -e "${SUCCESS} Applied Prettier formatting"
+            ((refactor_count++))
+        else
+            rollback_changes
+        fi
+    else
+        echo -e "${INFO} No Prettier issues to fix"
+    fi
+elif command -v npx &> /dev/null && npx eslint --version &> /dev/null; then
+    # Fallback to ESLint --fix
+    npx eslint --fix $modified_files >/dev/null 2>&1
     if validate_tests; then
-        echo -e "${SUCCESS} Applied dotnet format whitespace"
+        echo -e "${SUCCESS} Applied ESLint auto-fixes"
         ((refactor_count++))
     else
         rollback_changes
-        exit 1
     fi
+else
+    echo -e "${INFO} No code formatter found - skipping style fixes"
 fi
 
-# Check for specific style warnings in modified files
-echo -e "${WORKING} Checking for style warnings in modified files..."
+# Check for specific style issues in modified files
+echo -e "${WORKING} Checking for style issues in modified files..."
 style_warnings=0
 for file in $modified_files; do
     if [[ -f "$file" ]]; then
-        # Check for missing newline at end of file (SA1518)
+        # Check for missing newline at end of file
         if [[ -n "$(tail -c1 "$file" 2>/dev/null)" ]]; then
             echo "" >> "$file"
             echo -e "${SUCCESS} Fixed missing newline in $file"
             ((style_warnings++))
         fi
         
-        # Check for trailing whitespace (SA1028) 
+        # Check for trailing whitespace
         if grep -q '[[:space:]]$' "$file" 2>/dev/null; then
             sed -i 's/[[:space:]]*$//' "$file"
             echo -e "${SUCCESS} Removed trailing whitespace in $file"
@@ -132,69 +159,63 @@ if [[ $style_warnings -gt 0 ]]; then
         ((refactor_count++))
     else
         rollback_changes
-        exit 1
     fi
 fi
 
-echo -e "\n${REFACTOR} ${YELLOW}Priority 2: Centro Financial Standards${NC}"
+echo -e "\n${REFACTOR} ${YELLOW}Priority 2: TypeScript Best Practices${NC}"
 
-# Check for float/double to decimal conversions
-echo -e "${WORKING} Checking for financial calculation improvements..."
-financial_improvements=0
+# Check for TypeScript-specific improvements
+echo -e "${WORKING} Checking for TypeScript improvements..."
+typescript_improvements=0
 for file in $modified_files; do
     if [[ -f "$file" ]]; then
-        # Look for float/double in currency/financial contexts
-        if grep -q -E "(float|double).*[Aa]mount|[Aa]mount.*(float|double)|(float|double).*[Bb]alance|[Bb]alance.*(float|double)|(float|double).*[Pp]rice|[Pp]rice.*(float|double)" "$file" 2>/dev/null; then
-            echo -e "${INFO} Found potential float/double usage in financial context in $file"
-            echo -e "${INFO} Manual review recommended: Consider using decimal for financial calculations"
-            # Note: Automatic conversion is risky, so we just flag it
+        # Look for potential type safety improvements
+        if grep -q -E "(: any|: unknown)" "$file" 2>/dev/null; then
+            echo -e "${INFO} Found 'any' or 'unknown' type usage in $file"
+            echo -e "${INFO} Manual review recommended: Consider more specific types"
         fi
         
-        # Check for hardcoded currency formatting
-        if grep -q -E "ToString\(\"C\"\)" "$file" 2>/dev/null; then
-            # Add CultureInfo.InvariantCulture to currency formatting
-            sed -i 's/ToString("C")/ToString("C", CultureInfo.InvariantCulture)/g' "$file"
-            # Ensure using statement is present
-            if ! grep -q "using System.Globalization;" "$file" 2>/dev/null; then
-                sed -i '1i using System.Globalization;' "$file"
-            fi
-            echo -e "${SUCCESS} Added CultureInfo.InvariantCulture to currency formatting in $file"
-            ((financial_improvements++))
+        # Check for hardcoded strings that could be constants
+        if grep -q -E "\"[A-Z_]{3,}\"" "$file" 2>/dev/null; then
+            echo -e "${INFO} Found potential hardcoded constants in $file"
+            echo -e "${INFO} Manual review recommended: Consider using const declarations"
         fi
         
-        # Check for hardcoded currency codes
-        if grep -q -E "\"(USD|EUR|GBP|CAD)\"" "$file" 2>/dev/null; then
-            echo -e "${INFO} Found hardcoded currency codes in $file"
-            echo -e "${INFO} Manual review recommended: Consider using constants for currency codes"
+        # Check for console.log (should use proper logging)
+        if grep -q "console\.log" "$file" 2>/dev/null; then
+            echo -e "${INFO} Found console.log usage in $file"
+            echo -e "${INFO} Manual review recommended: Consider using proper logging library"
+        fi
+        
+        # Check for missing error handling in async functions
+        if grep -q -E "(async|await)" "$file" 2>/dev/null && ! grep -q -E "(try|catch)" "$file" 2>/dev/null; then
+            echo -e "${INFO} Found async/await without error handling in $file"
+            echo -e "${INFO} Manual review recommended: Add try/catch blocks"
+        fi
+        
+        # Check for number precision issues (financial context)
+        if grep -q -E "parseFloat|Number\(" "$file" 2>/dev/null; then
+            echo -e "${INFO} Found parseFloat/Number usage in $file"
+            echo -e "${INFO} Manual review recommended: Consider using precise decimal libraries for financial calculations"
         fi
     fi
 done
 
-if [[ $financial_improvements -gt 0 ]]; then
-    if validate_tests; then
-        echo -e "${SUCCESS} Applied $financial_improvements financial standard improvements"
-        ((refactor_count++))
-    else
-        rollback_changes
-        exit 1
-    fi
-fi
-
-echo -e "\n${REFACTOR} ${YELLOW}Priority 4: Logging & Observability${NC}"
+echo -e "\n${REFACTOR} ${YELLOW}Priority 3: Logging & Observability${NC}"
 
 # Check for logging improvements
 echo -e "${WORKING} Checking for logging improvements..."
 logging_improvements=0
 for file in $modified_files; do
     if [[ -f "$file" ]]; then
-        # Look for basic logging that could be improved
-        if grep -q -E "_logger\.Log.*\(\".*\"\)" "$file" 2>/dev/null; then
-            echo -e "${INFO} Found basic logging in $file"
-            echo -e "${INFO} Manual review recommended: Consider structured logging with correlation IDs"
+        # Look for console.log that should be proper logging
+        if grep -q "console\.log" "$file" 2>/dev/null; then
+            echo -e "${INFO} Found console.log usage in $file"
+            echo -e "${INFO} Manual review recommended: Consider using structured logging library"
         fi
         
-        # Look for exception logging without context
-        if grep -q -E "_logger\.LogError.*Exception" "$file" 2>/dev/null; then
+        # Look for basic error logging without context
+        if grep -q -E "console\.error|throw new Error" "$file" 2>/dev/null; then
             echo -e "${INFO} Found exception logging in $file" 
             echo -e "${INFO} Manual review recommended: Ensure correlation ID and tenant context included"
         fi

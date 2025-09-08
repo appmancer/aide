@@ -80,11 +80,12 @@ echo ""
 
 # Show current test structure to help identify where to add test
 echo -e "${INFO} Current test structure:"
-if [[ -d "test" ]] || [[ -d "tests" ]] || find . -name "*Test*" -type f | head -1 >/dev/null 2>&1; then
+if [[ -d "test" ]] || [[ -d "tests" ]] || [[ -d "__tests__" ]] || find . -name "*.test.*" -o -name "*.spec.*" | head -1 >/dev/null 2>&1; then
     echo "Existing test files:"
-    find . -name "*Test*.cs" -o -name "*Tests.cs" -o -name "*.test.*" | head -10 | sed 's/^/  - /'
+    find . -name "*.test.ts" -o -name "*.test.js" -o -name "*.spec.ts" -o -name "*.spec.js" | head -10 | sed 's/^/  - /'
 else
-    echo "  No existing test files found - you may need to create test project structure"
+    echo "  No existing test files found - you may need to create test structure"
+    echo "  Common patterns: src/__tests__/, test/, tests/, or *.test.ts files"
 fi
 
 echo ""
@@ -98,13 +99,20 @@ echo -e "${INFO} 4. Run the test to confirm it fails as expected"
 echo -e "${INFO} 5. Do NOT modify any existing tests in this cycle"
 echo ""
 echo -e "${INFO} Example test structure:"
-echo "  [Test]"
-echo "  public void ${test_description// /_}()"
-echo "  {"
+echo "  // Jest/Vitest example"
+echo "  describe('${test_description}', () => {"
+echo "    it('should ${test_description}', () => {"
 echo "      // Arrange - setup test data"
-echo "      // Act - call the method/feature being tested"
+echo "      // Act - call the function/method being tested"
 echo "      // Assert - verify expected behavior"
-echo "  }"
+echo "      expect(result).toBe(expected);"
+echo "    });"
+echo "  });"
+echo ""
+echo "  // Or simple test function"
+echo "  test('${test_description}', () => {"
+echo "    // Test implementation"
+echo "  });"
 echo ""
 
 # Wait for confirmation that test is written
@@ -118,10 +126,19 @@ echo -e "\n${WORKING} Running tests to verify RED state..."
 echo -e "${INFO} ${YELLOW}AI Agent: Run tests to confirm your new test fails:${NC}"
 echo ""
 echo -e "${YELLOW}=== REQUIRED: Verify RED State ===${NC}"
-echo -e "${INFO} Run: dotnet test --no-build"
+echo -e "${INFO} Run your test command to confirm the new test fails:"
+if [[ -f "package.json" ]]; then
+    if grep -q '"test"' package.json; then
+        echo -e "${INFO} Run: npm test (or yarn test)"
+    else
+        echo -e "${INFO} Run: npx jest (or your test runner)"
+    fi
+else
+    echo -e "${INFO} Run your test runner command"
+fi
 echo -e "${INFO} Confirm:"
 echo "  ✅ Your NEW test fails with expected error message"
-echo "  ✅ The failure indicates missing functionality (not code errors)"
+echo "  ✅ The failure indicates missing functionality (not syntax errors)"
 echo "  ⚠️  Existing tests may fail temporarily - that's OK during TDD"
 echo ""
 

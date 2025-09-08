@@ -24,13 +24,14 @@ if [[ ! -d ".git" ]]; then
     exit 1
 fi
 
-# Check if .NET project exists
-if [[ ! -f *.sln ]] && [[ ! -f *.csproj ]] && [[ ! -d "src" ]]; then
-    echo -e "${YELLOW} Warning: No .NET project files found"
-    echo -e "${INFO} Pre-commit hook assumes .NET project structure"
+# Check if TypeScript/Node.js project exists
+if [[ ! -f "package.json" ]] && [[ ! -f "tsconfig.json" ]]; then
+    echo -e "${YELLOW} Warning: No TypeScript/Node.js project files found"
+    echo -e "${INFO} Pre-commit hook assumes TypeScript project structure"
+    echo -e "${INFO} Expected: package.json and/or tsconfig.json"
 fi
 
-echo -e "${WORKING} Installing Centro pre-commit hook..."
+echo -e "${WORKING} Installing TypeScript pre-commit hook..."
 
 # Create hooks directory if it doesn't exist
 mkdir -p .git/hooks
@@ -41,7 +42,7 @@ cp .tools/hooks/pre-commit .git/hooks/pre-commit 2>/dev/null || {
     cat > .git/hooks/pre-commit << 'EOF'
 #!/bin/bash
 # Pre-commit hook for Spectrum Development Framework
-# Automatically enforces quality gates from AI-DEVELOPMENT-GUIDE before any commit
+# Automatically enforces quality gates for TypeScript projects before any commit
 
 # Colors and emoji for output
 RED='\033[0;31m'
@@ -58,89 +59,180 @@ BUILD="🔨"
 TEST="🧪"
 STYLE="💅"
 
-echo -e "${INFO} ${BLUE}Centro Pre-Commit Quality Gates${NC}"
+echo -e "${INFO} ${BLUE}TypeScript Pre-Commit Quality Gates${NC}"
 echo ""
+
+# Check if npm/yarn is available
+if ! command -v npm &> /dev/null && ! command -v yarn &> /dev/null; then
+    echo -e "${ERROR} ${RED}No package manager found${NC}"
+    echo -e "${INFO} Please install npm or yarn"
+    exit 1
+fi
+
+# Determine package manager
+if [[ -f "yarn.lock" ]] && command -v yarn &> /dev/null; then
+    PKG_MGR="yarn"
+    RUN_CMD="yarn run"
+    INSTALL_CMD="yarn install"
+elif [[ -f "package-lock.json" ]] || command -v npm &> /dev/null; then
+    PKG_MGR="npm"
+    RUN_CMD="npm run"
+    INSTALL_CMD="npm install"
+else
+    PKG_MGR="npm"
+    RUN_CMD="npm run"
+    INSTALL_CMD="npm install"
+fi
 
 # Quality Gate 1: Security (ZERO TOLERANCE)
 echo -e "${SECURITY} ${WORKING} Quality Gate 1: Security Validation"
-security_warnings=$(dotnet build --no-restore 2>&1 | grep -E "CA3[0-9]{3}|S2068|S4423")
 
-if [[ -n "$security_warnings" ]]; then
-    echo -e "${ERROR} ${RED}COMMIT BLOCKED: Security warnings found${NC}"
-    echo ""
-    echo -e "${YELLOW}Security issues detected:${NC}"
-    echo "$security_warnings"
-    echo ""
-    echo -e "${INFO} Security warnings are not allowed in Centro (financial system)"
-    echo -e "${INFO} Please fix these issues before committing:"
-    echo "  - CA3xxx: Security vulnerabilities (SQL injection, XSS, etc.)"
-    echo "  - S2068: Hardcoded credentials/passwords/API keys"
-    echo "  - S4423: Weak SSL/TLS protocols"
-    echo ""
-    exit 1
+# Check for hardcoded secrets/credentials
+secret_patterns="(password|secret|key|token|api_key).*=.*['\"][^'\"]{8,}"
+security_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx|json)$')
+
+if [[ -n "$security_files" ]]; then
+    security_warnings=""
+    for file in $security_files; do
+        if git show ":$file" | grep -iE "$secret_patterns" >/dev/null 2>&1; then
+            security_warnings+="$file: Potential hardcoded secret detected\n"
+        fi
+        # Check for common security issues
+        if git show ":$file" | grep -E "(eval\(|innerHTML\s*=|document\.write)" >/dev/null 2>&1; then
+            security_warnings+="$file: Potential XSS vulnerability detected\n"
+        fi
+    done
+    
+    if [[ -n "$security_warnings" ]]; then
+        echo -e "${ERROR} ${RED}COMMIT BLOCKED: Security warnings found${NC}"
+        echo ""
+        echo -e "${YELLOW}Security issues detected:${NC}"
+        echo -e "$security_warnings"
+        echo ""
+        echo -e "${INFO} Security warnings are not allowed"
+        echo -e "${INFO} Please fix these issues before committing:"
+        echo "  - Remove hardcoded secrets, API keys, passwords"
+        echo "  - Fix potential XSS vulnerabilities (eval, innerHTML, document.write)"
+        echo "  - Use environment variables for sensitive data"
+        echo ""
+        exit 1
+    fi
 fi
+
+# Check npm audit for known vulnerabilities (if package.json exists)
+if [[ -f "package.json" ]]; then
+    audit_output=$(npm audit --audit-level=high 2>&1)
+    if [[ $? -ne 0 ]] && echo "$audit_output" | grep -q "high\|critical"; then
+        echo -e "${ERROR} ${RED}COMMIT BLOCKED: High/Critical security vulnerabilities found${NC}"
+        echo ""
+        echo -e "${YELLOW}Security vulnerabilities:${NC}"
+        echo "$audit_output" | grep -A 3 -B 1 "high\|critical"
+        echo ""
+        echo -e "${INFO} Run 'npm audit fix' to resolve vulnerabilities"
+        exit 1
+    fi
+fi
+
 echo -e "${SUCCESS} Security validation passed"
 
-# Quality Gate 2: Build Success (BLOCKING)
-echo -e "\n${BUILD} ${WORKING} Quality Gate 2: Build Validation"
-build_output=$(dotnet build --verbosity quiet 2>&1)
-build_exit_code=$?
+# Quality Gate 2: TypeScript Compilation (BLOCKING)
+echo -e "\n${BUILD} ${WORKING} Quality Gate 2: TypeScript Compilation"
 
-if [[ $build_exit_code -ne 0 ]]; then
-    echo -e "${ERROR} ${RED}COMMIT BLOCKED: Build failed${NC}"
-    echo ""
-    echo -e "${YELLOW}Build errors:${NC}"
-    echo "$build_output"
-    echo ""
-    echo -e "${INFO} Fix build errors before committing"
-    exit 1
+if [[ -f "tsconfig.json" ]]; then
+    # Check if TypeScript is available
+    if ! command -v npx &> /dev/null; then
+        echo -e "${ERROR} npx not found, installing dependencies..."
+        $INSTALL_CMD
+    fi
+    
+    # Compile TypeScript
+    build_output=$(npx tsc --noEmit 2>&1)
+    build_exit_code=$?
+    
+    if [[ $build_exit_code -ne 0 ]]; then
+        echo -e "${ERROR} ${RED}COMMIT BLOCKED: TypeScript compilation failed${NC}"
+        echo ""
+        echo -e "${YELLOW}Compilation errors:${NC}"
+        echo "$build_output"
+        echo ""
+        echo -e "${INFO} Fix TypeScript errors before committing"
+        exit 1
+    fi
+elif [[ -f "package.json" ]]; then
+    # Check if there's a build script
+    if grep -q '"build"' package.json; then
+        build_output=$($RUN_CMD build 2>&1)
+        build_exit_code=$?
+        
+        if [[ $build_exit_code -ne 0 ]]; then
+            echo -e "${ERROR} ${RED}COMMIT BLOCKED: Build failed${NC}"
+            echo ""
+            echo -e "${YELLOW}Build errors:${NC}"
+            echo "$build_output"
+            echo ""
+            echo -e "${INFO} Fix build errors before committing"
+            exit 1
+        fi
+    fi
 fi
-echo -e "${SUCCESS} Build validation passed"
+
+echo -e "${SUCCESS} Compilation validation passed"
 
 # Quality Gate 3: Tests (BLOCKING)
 echo -e "\n${TEST} ${WORKING} Quality Gate 3: Test Validation"
-test_output=$(dotnet test --no-build --verbosity quiet 2>&1)
-test_exit_code=$?
 
-if [[ $test_exit_code -ne 0 ]]; then
-    echo -e "${ERROR} ${RED}COMMIT BLOCKED: Tests failed${NC}"
-    echo ""
-    echo -e "${YELLOW}Test failures:${NC}"
-    echo "$test_output" | grep -A 5 -B 5 "Failed"
-    echo ""
-    echo -e "${INFO} All tests must pass before committing"
-    echo -e "${INFO} If you're in TDD cycle, ensure your new test passes"
-    exit 1
+if [[ -f "package.json" ]] && grep -q '"test"' package.json; then
+    test_output=$($RUN_CMD test 2>&1)
+    test_exit_code=$?
+    
+    if [[ $test_exit_code -ne 0 ]]; then
+        echo -e "${ERROR} ${RED}COMMIT BLOCKED: Tests failed${NC}"
+        echo ""
+        echo -e "${YELLOW}Test failures:${NC}"
+        echo "$test_output" | grep -A 5 -B 5 "FAIL\|Error\|✗\|×"
+        echo ""
+        echo -e "${INFO} All tests must pass before committing"
+        echo -e "${INFO} If you're in TDD cycle, ensure your new test passes"
+        exit 1
+    fi
+    echo -e "${SUCCESS} Test validation passed"
+else
+    echo -e "${YELLOW} No test script found in package.json - skipping test validation"
 fi
-echo -e "${SUCCESS} Test validation passed"
 
 # Quality Gate 4: Code Style (AUTO-FIX)
 echo -e "\n${STYLE} ${WORKING} Quality Gate 4: Style Validation"
-format_output=$(dotnet format whitespace --verify-no-changes 2>&1)
-format_exit_code=$?
 
-if [[ $format_exit_code -ne 0 ]]; then
-    echo -e "${YELLOW} Style issues found - auto-fixing..."
-    dotnet format whitespace --include $(git diff --cached --name-only --diff-filter=ACM | grep '\.cs$' | tr '\n' ' ') 2>/dev/null
+# Check for Prettier
+if [[ -f ".prettierrc" ]] || [[ -f ".prettierrc.json" ]] || [[ -f ".prettierrc.js" ]] || grep -q "prettier" package.json 2>/dev/null; then
+    staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx|json|md)$')
     
-    # Re-stage the formatted files
-    git diff --cached --name-only --diff-filter=ACM | grep '\.cs$' | xargs git add 2>/dev/null || true
+    if [[ -n "$staged_files" ]]; then
+        echo -e "${YELLOW} Running Prettier on staged files..."
+        echo "$staged_files" | xargs npx prettier --write 2>/dev/null || true
+        echo "$staged_files" | xargs git add 2>/dev/null || true
+        echo -e "${SUCCESS} Code automatically formatted and re-staged"
+    else
+        echo -e "${SUCCESS} No files to format"
+    fi
+elif command -v npx &> /dev/null && npx eslint --version &> /dev/null; then
+    # Fallback to ESLint --fix if available
+    staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx)$')
     
-    echo -e "${SUCCESS} Code automatically formatted and re-staged"
+    if [[ -n "$staged_files" ]]; then
+        echo -e "${YELLOW} Running ESLint --fix on staged files..."
+        echo "$staged_files" | xargs npx eslint --fix 2>/dev/null || true
+        echo "$staged_files" | xargs git add 2>/dev/null || true
+        echo -e "${SUCCESS} Code automatically fixed and re-staged"
+    else
+        echo -e "${SUCCESS} No files to lint"
+    fi
 else
-    echo -e "${SUCCESS} Style validation passed"
+    echo -e "${YELLOW} No code formatter found (Prettier/ESLint) - skipping style validation"
 fi
 
 # Quality Summary
 echo -e "\n${SUCCESS} ${GREEN}ALL QUALITY GATES PASSED${NC}"
-
-# Show warning counts for awareness (but don't block)
-warning_count=$(dotnet build --no-restore 2>&1 | grep -c "warning" || echo "0")
-if [[ "$warning_count" -gt 0 ]]; then
-    echo -e "${INFO} ${YELLOW}Note: $warning_count non-blocking warnings found${NC}"
-    echo -e "${INFO} Consider addressing these in future refactoring"
-fi
-
 echo -e "${SUCCESS} Commit proceeding..."
 echo ""
 
@@ -154,16 +246,17 @@ chmod +x .git/hooks/pre-commit
 echo -e "${SUCCESS} Pre-commit hook installed successfully!"
 echo ""
 echo -e "${INFO} ${YELLOW}What the pre-commit hook does:${NC}"
-echo "  🔒 Blocks commits with security warnings (CA3xxx, S2068, S4423)"
-echo "  🔨 Blocks commits with build failures"
+echo "  🔒 Blocks commits with security vulnerabilities (secrets, XSS, npm audit)"
+echo "  🔨 Blocks commits with TypeScript compilation failures"
 echo "  🧪 Blocks commits with test failures"
-echo "  💅 Auto-fixes code style issues and re-stages files"
+echo "  💅 Auto-fixes code style with Prettier/ESLint"
 echo ""
 echo -e "${INFO} ${GREEN}Benefits for AI Agents:${NC}"
-echo "  ✅ Impossible to commit code with security issues"
-echo "  ✅ Impossible to commit broken builds or tests"
+echo "  ✅ Impossible to commit code with security vulnerabilities"
+echo "  ✅ Impossible to commit TypeScript compilation errors"
+echo "  ✅ Impossible to commit broken tests"
 echo "  ✅ Automatic code formatting - no manual intervention needed"
-echo "  ✅ Enforces quality standards from AI-DEVELOPMENT-GUIDE"
+echo "  ✅ Enforces TypeScript quality standards"
 echo ""
 echo -e "${YELLOW} Note: Hook runs automatically on every 'git commit'${NC}"
 echo -e "${INFO} To bypass hook (emergency only): git commit --no-verify"

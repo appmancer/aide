@@ -1,6 +1,6 @@
 #!/bin/bash
 # pr-ready command for Spectrum Development Framework
-# Implements: Automated quality gates validation and PR creation (TypeScript version)
+# Implements: Automated quality gates validation and PR creation (Kotlin/Android version)
 
 # Colors and emoji
 RED='\033[0;31m'
@@ -18,14 +18,14 @@ PR="🔀"
 echo -e "${PR} ${BLUE}PR READY${NC}: Automated quality validation and Pull Request creation"
 
 # Check if we're in a ticket workflow
-if [[ ! -f ".tmp/current-ticket.json" ]]; then
+if [[ ! -f ".spectrum/current-ticket.json" ]]; then
     echo -e "${ERROR} No active ticket workflow found"
-    echo -e "${INFO} Please run './.tools/commands/start-ticket' first"
+    echo -e "${INFO} Please run './.spectrum-dev/spectrum-dev start-ticket' first"
     exit 1
 fi
 
 # Load current ticket context
-ticket_info=$(cat .tmp/current-ticket.json)
+ticket_info=$(cat .spectrum/current-ticket.json)
 ticket_id=$(echo "$ticket_info" | jq -r '.ticket')
 ticket_title=$(echo "$ticket_info" | jq -r '.title')
 domain=$(echo "$ticket_info" | jq -r '.domain')
@@ -43,43 +43,20 @@ fi
 
 echo -e "${INFO} TDD Cycles completed: $tdd_cycles"
 
-# Automated Quality Gates for TypeScript/Node.js
+# Automated Quality Gates for Kotlin/Android
 echo -e "\n${QUALITY} ${YELLOW}Running Automated Quality Gates:${NC}"
 echo ""
 
-# Quality Gate 1: Security (AUTOMATED) - Check for security warnings in TypeScript
+# Quality Gate 1: Security (AUTOMATED) - Check for security warnings in Kotlin
 echo -e "${WORKING} Quality Gate 1: Security Validation"
-
-# Check for hardcoded secrets/credentials
-security_files=$(git diff dev..HEAD --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx|json)$')
-security_warnings=""
-
-if [[ -n "$security_files" ]]; then
-    secret_patterns="(password|secret|key|token|api_key).*=.*['\"][^'\"]{8,}"
-    for file in $security_files; do
-        if git show "HEAD:$file" | grep -iE "$secret_patterns" >/dev/null 2>&1; then
-            security_warnings+="$file: Potential hardcoded secret detected\n"
-        fi
-        # Check for common security issues
-        if git show "HEAD:$file" | grep -E "(eval\(|innerHTML\s*=|document\.write)" >/dev/null 2>&1; then
-            security_warnings+="$file: Potential XSS vulnerability detected\n"
-        fi
-    done
-fi
-
-# Check npm audit for vulnerabilities
-if [[ -f "package.json" ]]; then
-    audit_output=$(npm audit --audit-level=high 2>&1)
-    if [[ $? -ne 0 ]] && echo "$audit_output" | grep -q "high\|critical"; then
-        security_warnings+="npm audit: High/Critical vulnerabilities found\n"
-    fi
-fi
+# Build and capture security warnings specific to Android/Kotlin (with timeout to prevent hanging)
+security_warnings=$(timeout 120 ./gradlew app:compileDebugKotlin app:compileReleaseKotlin --no-daemon 2>&1 | grep -iE "security|S2068|S4423|password|key|token|secret")
 
 if [[ -n "$security_warnings" ]]; then
     echo -e "${ERROR} ${RED}BLOCKING: Security warnings found${NC}"
     echo ""
     echo -e "${YELLOW}Security issues detected:${NC}"
-    echo -e "$security_warnings"
+    echo "$security_warnings"
     echo ""
     echo -e "${INFO} Security warnings must be resolved before PR creation"
     echo -e "${INFO} Fix these issues and rerun pr-ready"
@@ -87,150 +64,86 @@ if [[ -n "$security_warnings" ]]; then
 fi
 echo -e "${SUCCESS} Security validation passed"
 
-# Quality Gate 2: Build (AUTOMATED)
+# Quality Gate 2: Build (AUTOMATED) - Use compilation instead of full build to avoid hanging
 echo -e "\n${WORKING} Quality Gate 2: Build Validation"
+echo -e "${INFO} Running: ./gradlew app:compileDebugKotlin app:compileReleaseKotlin --no-daemon"
 
-# Determine package manager and build command
-if [[ -f "yarn.lock" ]] && command -v yarn &> /dev/null; then
-    PKG_MGR="yarn"
-    RUN_CMD="yarn run"
-elif [[ -f "package-lock.json" ]] || command -v npm &> /dev/null; then
-    PKG_MGR="npm"
-    RUN_CMD="npm run"
-else
-    PKG_MGR="npm"
-    RUN_CMD="npm run"
-fi
+compile_output=$(timeout 90 ./gradlew app:compileDebugKotlin app:compileReleaseKotlin --no-daemon 2>&1)
+compile_exit_code=$?
 
-build_output=""
-build_exit_code=0
-
-# TypeScript compilation check
-if [[ -f "tsconfig.json" ]]; then
-    echo -e "${INFO} Running: npx tsc --noEmit"
-    build_output=$(npx tsc --noEmit 2>&1)
-    build_exit_code=$?
-elif [[ -f "package.json" ]] && grep -q '"build"' package.json; then
-    echo -e "${INFO} Running: $RUN_CMD build"
-    build_output=$($RUN_CMD build 2>&1)
-    build_exit_code=$?
-else
-    echo -e "${YELLOW} No build script found - skipping build validation"
-fi
-
-if [[ $build_exit_code -ne 0 ]]; then
-    echo -e "${ERROR} ${RED}BLOCKING: Build failed${NC}"
+if [[ $compile_exit_code -ne 0 ]]; then
+    echo -e "${ERROR} ${RED}BLOCKING: Compilation failed${NC}"
     echo ""
-    echo -e "${YELLOW}Build errors:${NC}"
-    echo "$build_output"
+    echo -e "${YELLOW}Compilation errors:${NC}"
+    echo "$compile_output" | tail -20
     echo ""
-    echo -e "${INFO} Fix build errors and rerun pr-ready"
+    echo -e "${INFO} Fix compilation errors and rerun pr-ready"
     exit 1
 fi
 echo -e "${SUCCESS} Build validation passed"
 
 # Quality Gate 3: Tests (AUTOMATED)
 echo -e "\n${WORKING} Quality Gate 3: Test Validation"
+echo -e "${INFO} Running: ./gradlew test --no-daemon"
 
-test_output=""
-test_exit_code=0
-test_passed=0
-test_total=0
-
-if [[ -f "package.json" ]] && grep -q '"test"' package.json; then
-    echo -e "${INFO} Running: $RUN_CMD test"
-    test_output=$($RUN_CMD test 2>&1)
-    test_exit_code=$?
-    
-    # Extract test results (works for most test runners)
-    if echo "$test_output" | grep -q "Tests:.*passed"; then
-        test_passed=$(echo "$test_output" | grep -o "[0-9]* passed" | grep -o "[0-9]*" | head -1)
-        test_total=$(echo "$test_output" | grep -E "Tests:.*[0-9]+ total" | grep -o "[0-9]* total" | grep -o "[0-9]*" | head -1)
-    elif echo "$test_output" | grep -q "test.*passed"; then
-        test_passed=$(echo "$test_output" | grep -o "[0-9]* test.*passed" | grep -o "^[0-9]*" | head -1)
-        test_total=$test_passed
-    fi
-    
-    # Fallback parsing
-    if [[ "$test_passed" == "" ]]; then
-        test_passed="all"
-        test_total="all"
-    fi
-    
-else
-    echo -e "${YELLOW} No test script found in package.json - skipping test validation"
-fi
+test_output=$(./gradlew test --no-daemon 2>&1)
+test_exit_code=$?
 
 if [[ $test_exit_code -ne 0 ]]; then
     echo -e "${ERROR} ${RED}BLOCKING: Tests failed${NC}"
     echo ""
     echo -e "${YELLOW}Test failures:${NC}"
-    echo "$test_output" | grep -A 10 -B 5 "FAIL\|Error\|✗\|×\|Failed"
+    echo "$test_output" | grep -A 10 -B 5 -i "FAILED"
     echo ""
     echo -e "${INFO} All tests must pass before PR creation"
     echo -e "${INFO} Fix failing tests and rerun pr-ready"
     exit 1
 fi
 
+# Extract test summary from Gradle output
+test_passed=$(echo "$test_output" | grep -o "BUILD SUCCESSFUL" | wc -l)
+test_total_line=$(echo "$test_output" | grep -E "tests? completed" | tail -1)
+if [[ -n "$test_total_line" ]]; then
+    test_total=$(echo "$test_total_line" | grep -o "[0-9]* test" | grep -o "[0-9]*" || echo "0")
+    test_passed=$(echo "$test_total_line" | grep -o "[0-9]* test" | grep -o "[0-9]*" || echo "0")
+else
+    test_total="0"
+    test_passed="0"
+fi
 echo -e "${SUCCESS} Test validation passed ($test_passed/$test_total tests)"
 
-# Quality Gate 4: Style (AUTOMATED with auto-fix) - Use Prettier/ESLint for TypeScript
+# Quality Gate 4: Style (AUTOMATED with auto-fix) - Use ktlint for Kotlin
 echo -e "\n${WORKING} Quality Gate 4: Style Validation"
+echo -e "${INFO} Running: ./gradlew ktlintCheck --no-daemon"
 
-style_exit_code=0
+format_output=$(./gradlew ktlintCheck --no-daemon 2>&1)
+format_exit_code=$?
 
-# Check for Prettier
-if [[ -f ".prettierrc" ]] || [[ -f ".prettierrc.json" ]] || [[ -f ".prettierrc.js" ]] || grep -q "prettier" package.json 2>/dev/null; then
-    echo -e "${INFO} Running: npx prettier --check ."
-    format_output=$(npx prettier --check . 2>&1)
-    style_exit_code=$?
+if [[ $format_exit_code -ne 0 ]]; then
+    echo -e "${YELLOW} Style issues found - auto-fixing..."
+    ./gradlew ktlintFormat --no-daemon
     
-    if [[ $style_exit_code -ne 0 ]]; then
-        echo -e "${YELLOW} Style issues found - auto-fixing..."
-        npx prettier --write .
-        
-        # Check if there are changes to commit
-        if [[ -n "$(git status --porcelain)" ]]; then
-            echo -e "${INFO} Auto-formatted files - staging changes..."
-            git add .
-            git commit -m "Auto-format code style
-
-🤖 Generated with [opencode](https://opencode.ai)
-
-Co-Authored-By: opencode <noreply@opencode.ai>"
-        fi
-        
-        echo -e "${SUCCESS} Code automatically formatted and committed"
-    else
-        echo -e "${SUCCESS} Style validation passed"
-    fi
-elif command -v npx &> /dev/null && npx eslint --version &> /dev/null; then
-    echo -e "${INFO} Running: npx eslint . --fix"
-    format_output=$(npx eslint . --fix 2>&1)
-    style_exit_code=$?
-    
-    # ESLint --fix doesn't fail, so check if files were modified
+    # Check if there are changes to commit
     if [[ -n "$(git status --porcelain)" ]]; then
-        echo -e "${INFO} Auto-fixed files - staging changes..."
+        echo -e "${INFO} Auto-formatted files - staging changes..."
         git add .
-        git commit -m "Auto-fix ESLint issues
+        git commit -m "Auto-format code style
 
 🤖 Generated with [opencode](https://opencode.ai)
 
 Co-Authored-By: opencode <noreply@opencode.ai>"
-        echo -e "${SUCCESS} Code automatically fixed and committed"
-    else
-        echo -e "${SUCCESS} Style validation passed"
     fi
+    
+    echo -e "${SUCCESS} Code automatically formatted and committed"
 else
-    echo -e "${YELLOW} No code formatter found (Prettier/ESLint) - skipping style validation"
+    echo -e "${SUCCESS} Style validation passed"
 fi
 
 # Quality Gate Summary
 echo -e "\n${SUCCESS} ${GREEN}ALL QUALITY GATES PASSED${NC}"
 echo -e "${INFO} Quality Summary:"
-echo "  ✅ Security: No critical security vulnerabilities"
-echo "  ✅ Build: TypeScript compilation successful"
+echo "  ✅ Security: No critical security warnings"
+echo "  ✅ Build: Successful compilation"
 echo "  ✅ Tests: All tests passing ($test_passed/$test_total)"
 echo "  ✅ Style: Code properly formatted"
 
@@ -379,10 +292,8 @@ echo -e "${INFO} SSH Key Management: Detected original user: '$original_gh_user'
 gh auth switch --hostname github.com --user appmancer
 original_remote=$(git remote get-url origin)
 
-# Dynamically determine correct remote URL based on current repository
-repo_path=$(echo "$original_remote" | sed -E 's/.*github\.com[:-]([^/]+\/[^/]+)\.git.*/\1/')
-correct_remote="git@github.com:${repo_path}.git"
-
+# Ensure remote uses standard github.com format (should work with appmancer key)
+correct_remote="git@github.com:appmancer/FoxyPlayer.git"
 if [[ "$original_remote" != "$correct_remote" ]]; then
     echo -e "${INFO} Setting remote URL for standard GitHub SSH access..."
     echo -e "${INFO} From: $original_remote"
@@ -395,7 +306,7 @@ echo -e "\n${WORKING} Pushing branch to remote..."
 git push -u origin "$branch" || {
     echo -e "${ERROR} Failed to push branch"
     echo -e "${INFO} Check network connection and repository permissions"
-    echo -e "${INFO} Verify SSH key authentication with: ssh -T git@github.com"
+    echo -e "${INFO} Verify SSH key authentication with: ssh -T git@github.com-personal"
     exit 1
 }
 echo -e "${SUCCESS} Branch pushed to origin"
@@ -421,17 +332,17 @@ Implements $ticket_id: $ticket_title
 
 ## Implementation Details
 - Developed using Test-Driven Development methodology
-- Follows TypeScript best practices and AI-optimized code organization
+- Follows AI-optimized code organization patterns from Centro standards
 - All automated quality gates passed before PR creation
 - Complete feature implementation with comprehensive test coverage
 
 ## Quality Validation ✅
 All quality gates automated and verified:
 
-🔒 **Security**: No security vulnerabilities or exposed secrets  
-🔨 **Build**: TypeScript compilation successful with no errors  
+🔒 **Security**: No security warnings or exposed secrets  
+🔨 **Build**: Successful Gradle compilation with no errors  
 🧪 **Tests**: All $test_passed tests passing  
-💅 **Style**: Code properly formatted according to Prettier/ESLint standards  
+💅 **Style**: Code properly formatted according to ktlint standards  
 
 ## Test Coverage
 Implementation includes comprehensive test coverage developed through $tdd_cycles TDD cycles:
@@ -477,7 +388,7 @@ if ! gh pr create --base dev --head "$branch" --title "$ticket_id: $ticket_title
         repo_url="https://github.com/$(git remote get-url origin | sed 's/.*github.com[:/]//' | sed 's/.git$//')"
         echo "  4. Create PR manually at: $repo_url/pull/new/$branch"
         echo "  5. After creating PR manually, update workflow state:"
-        echo "     jq '.phase = \"pr-created\" | .pr_url = \"YOUR_PR_URL\"' .tmp/current-ticket.json > tmp && mv tmp .tmp/current-ticket.json"
+        echo "     jq '.phase = \"pr-created\" | .pr_url = \"YOUR_PR_URL\"' .spectrum/current-ticket.json > tmp && mv tmp .spectrum/current-ticket.json"
         echo ""
         echo -e "${INFO} Quality gates passed - branch is ready for PR creation"
         exit 1
@@ -496,18 +407,18 @@ jq '.phase = "pr-created" | .pr_created_at = now | .pr_created_at |= todate | .p
    --arg url "$pr_url" \
    --arg files "$files_changed" \
    --arg tests "$test_passed" \
-   .tmp/current-ticket.json > .tmp/current-ticket.json.tmp
-mv .tmp/current-ticket.json.tmp .tmp/current-ticket.json
+   .spectrum/current-ticket.json > .spectrum/current-ticket.json.tmp
+mv .spectrum/current-ticket.json.tmp .spectrum/current-ticket.json
 
 # Restore remote URL for development workflow
 echo -e "${INFO} Configuring remote URL for ongoing development..."
 
 # Determine correct remote for development based on original user
 if [[ "$original_gh_user" == "appmancer" ]]; then
-    dev_remote="git@github.com:${repo_path}.git"
+    dev_remote="git@github.com:appmancer/FoxyPlayer.git"
     echo -e "${INFO} Keeping appmancer remote: $dev_remote"
 else
-    dev_remote="git@github.com-3Degrees:${repo_path}.git"
+    dev_remote="git@github.com-3Degrees:Sam-3Degrees/FoxyPlayer.git"
     echo -e "${INFO} Setting Sam-3Degrees remote: $dev_remote"
 fi
 
@@ -531,11 +442,11 @@ echo -e "${INFO} ${GREEN}Automatically starting PR monitoring...${NC}"
 echo ""
 
 # Automatically start PR monitoring
-./.tools/spectrum-dev pr-monitor
+./.spectrum-dev/spectrum-dev pr-monitor
 
 echo ""
 echo -e "${INFO} ${YELLOW}Phase 3 (after merge):${NC}"
-echo "  1. 🧹 Clean up: ./.tools/spectrum-dev pr-cleanup (after PR merged)"
+echo "  1. 🧹 Clean up: ./.spectrum-dev/spectrum-dev pr-cleanup (after PR merged)"
 echo ""
 echo -e "${YELLOW} 🛡️ Branch Protection: PR correctly targets 'dev' branch (staging deployment)${NC}"
 echo -e "${INFO} 🎯 Quality Assurance: Pre-commit hooks will continue enforcing standards"

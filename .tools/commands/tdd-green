@@ -64,10 +64,14 @@ echo ""
 # Show current project structure to help identify where to add implementation
 echo -e "${INFO} Current implementation structure:"
 if [[ -d "src" ]]; then
-    echo "Source files in domain:"
-    find src -name "*.cs" | grep -v Test | head -10 | sed 's/^/  - /'
+    echo "Source files:"
+    find src -name "*.ts" -o -name "*.js" | grep -v test | grep -v spec | head -10 | sed 's/^/  - /'
+elif [[ -d "lib" ]]; then
+    echo "Library files:"
+    find lib -name "*.ts" -o -name "*.js" | grep -v test | grep -v spec | head -10 | sed 's/^/  - /'
 else
     echo "  Source directory not found - you may need to create project structure"
+    echo "  Common patterns: src/, lib/, or root-level files"
 fi
 
 echo ""
@@ -82,14 +86,15 @@ echo -e "${INFO} 5. Follow AI-optimized file organization (context density)"
 echo ""
 
 # Show AI-optimized implementation guidance
-echo -e "${INFO} AI-Optimized Implementation Guidelines:"
+echo -e "${INFO} TypeScript Implementation Guidelines:"
 echo "  📁 Use context density - related code in single files"
-echo "  📋 Follow top-to-bottom dependency flow:"
-echo "     - API Models (primitives, no dependencies)"
-echo "     - Domain Exceptions (depend on models)"
-echo "     - Infrastructure Components (depend on models + exceptions)"
-echo "     - Business Logic (depends on all above)"
-echo "     - Configuration (depends on business logic)"
+echo "  📋 Follow dependency hierarchy:"
+echo "     - Types/Interfaces (primitives, no dependencies)"
+echo "     - Domain Models & Errors (depend on types)"
+echo "     - Core Functions/Classes (depend on models)"
+echo "     - Services/Adapters (depend on core)"
+echo "     - Configuration/Setup (depends on services)"
+echo "  🎯 Export what you need, keep internal code private"
 echo ""
 
 # Wait for implementation
@@ -103,7 +108,15 @@ echo -e "\n${WORKING} Running tests to verify GREEN state..."
 echo -e "${INFO} ${YELLOW}AI Agent: Run tests to confirm GREEN state:${NC}"
 echo ""
 echo -e "${YELLOW}=== REQUIRED: Verify GREEN State ===${NC}"
-echo -e "${INFO} Run: dotnet test --no-build"
+if [[ -f "package.json" ]]; then
+    if grep -q '"test"' package.json; then
+        echo -e "${INFO} Run: npm test (or yarn test)"
+    else
+        echo -e "${INFO} Run: npx jest (or your test runner)"
+    fi
+else
+    echo -e "${INFO} Run your test runner command"
+fi
 echo -e "${INFO} Confirm:"
 echo "  ✅ Your new test now passes"
 echo "  ✅ Implementation satisfies the test requirement"
@@ -126,10 +139,17 @@ echo -e "\n${WORKING} Running basic quality checks..."
 echo -e "${INFO} ${YELLOW}AI Agent: Check for obvious quality issues:${NC}"
 echo ""
 echo -e "${YELLOW}=== OPTIONAL: Basic Quality Check ===${NC}"
-echo -e "${INFO} Run: dotnet build --verbosity normal"
+if [[ -f "tsconfig.json" ]]; then
+    echo -e "${INFO} Run: npx tsc --noEmit (TypeScript compilation check)"
+elif [[ -f "package.json" ]] && grep -q '"build"' package.json; then
+    echo -e "${INFO} Run: npm run build (or yarn build)"
+else
+    echo -e "${INFO} Run your build/compilation command"
+fi
 echo -e "${INFO} Check for:"
-echo "  ⚠️  Security warnings (CA3xxx, S2068, S4423)"
-echo "  ⚠️  Critical reliability issues"
+echo "  ⚠️  TypeScript compilation errors"
+echo "  ⚠️  Security warnings (eslint security rules)"
+echo "  ⚠️  Critical runtime issues"
 echo "  ℹ️  Style warnings can be addressed in REFACTOR phase"
 echo ""
 
