@@ -8,8 +8,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "dev": "ts-node src/index.ts",
-    "lint": "eslint src/**/*.ts",
-    "lint:fix": "eslint src/**/*.ts --fix"
+    "lint": "eslint src/**/*.ts --config eslint.config.js",
+    "lint:fix": "eslint src/**/*.ts --config eslint.config.js --fix"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
@@ -23,7 +23,9 @@
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "ts-morph": "^20.0.0"
+  },
   "keywords": ["spectrum", "development"],
   "author": "Spectrum Development Team",
   "license": "ISC"

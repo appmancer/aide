@@ -1,7 +1,6 @@
 # Hidden folders and files
 .*
 !.gitignore
-!.eslintrc.js
 
 # Temporary files
 .tmp/

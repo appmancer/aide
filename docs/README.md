@@ -16,7 +16,7 @@ aide/
 ├── package.json         # Dependencies and scripts
 ├── tsconfig.json        # TypeScript configuration
 ├── jest.config.js       # Test configuration
-└── .eslintrc.js         # ESLint configuration
+└── eslint.config.js     # ESLint configuration
 ```
 
 ## Getting Started
