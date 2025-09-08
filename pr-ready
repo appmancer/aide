@@ -1,6 +1,6 @@
 #!/bin/bash
 # pr-ready command for Spectrum Development Framework
-# Implements: Automated quality gates validation and PR creation (Kotlin/Android version)
+# Implements: Automated quality gates validation and PR creation (TypeScript version)
 
 # Colors and emoji
 RED='\033[0;31m'
@@ -43,32 +43,32 @@ fi
 
 echo -e "${INFO} TDD Cycles completed: $tdd_cycles"
 
-# Automated Quality Gates for Kotlin/Android
+# Automated Quality Gates for TypeScript/Node.js
 echo -e "\n${QUALITY} ${YELLOW}Running Automated Quality Gates:${NC}"
 echo ""
 
-# Quality Gate 1: Security (AUTOMATED) - Check for security warnings in Kotlin
+# Quality Gate 1: Security (AUTOMATED) - Check for security vulnerabilities in dependencies
 echo -e "${WORKING} Quality Gate 1: Security Validation"
-# Build and capture security warnings specific to Android/Kotlin (with timeout to prevent hanging)
-security_warnings=$(timeout 120 ./gradlew app:compileDebugKotlin app:compileReleaseKotlin --no-daemon 2>&1 | grep -iE "security|S2068|S4423|password|key|token|secret")
+# Run npm audit to check for security vulnerabilities in dependencies (with timeout to prevent hanging)
+security_warnings=$(timeout 120 npm audit --json 2>/dev/null | jq '.advisories, .vulnerabilities' 2>/dev/null | grep -v null)
 
-if [[ -n "$security_warnings" ]]; then
-    echo -e "${ERROR} ${RED}BLOCKING: Security warnings found${NC}"
+if [[ -n "$security_warnings" && "$security_warnings" != "{}" ]]; then
+    echo -e "${ERROR} ${RED}BLOCKING: Security vulnerabilities found${NC}"
     echo ""
     echo -e "${YELLOW}Security issues detected:${NC}"
     echo "$security_warnings"
     echo ""
-    echo -e "${INFO} Security warnings must be resolved before PR creation"
+    echo -e "${INFO} Security vulnerabilities must be resolved before PR creation"
     echo -e "${INFO} Fix these issues and rerun pr-ready"
     exit 1
 fi
 echo -e "${SUCCESS} Security validation passed"
 
-# Quality Gate 2: Build (AUTOMATED) - Use compilation instead of full build to avoid hanging
+# Quality Gate 2: Build (AUTOMATED) - Use TypeScript compilation instead of full build to avoid hanging
 echo -e "\n${WORKING} Quality Gate 2: Build Validation"
-echo -e "${INFO} Running: ./gradlew app:compileDebugKotlin app:compileReleaseKotlin --no-daemon"
+echo -e "${INFO} Running: npm run build"
 
-compile_output=$(timeout 90 ./gradlew app:compileDebugKotlin app:compileReleaseKotlin --no-daemon 2>&1)
+compile_output=$(timeout 90 npm run build 2>&1)
 compile_exit_code=$?
 
 if [[ $compile_exit_code -ne 0 ]]; then
@@ -84,44 +84,44 @@ echo -e "${SUCCESS} Build validation passed"
 
 # Quality Gate 3: Tests (AUTOMATED)
 echo -e "\n${WORKING} Quality Gate 3: Test Validation"
-echo -e "${INFO} Running: ./gradlew test --no-daemon"
+echo -e "${INFO} Running: npm test"
 
-test_output=$(./gradlew test --no-daemon 2>&1)
+test_output=$(npm test 2>&1)
 test_exit_code=$?
 
 if [[ $test_exit_code -ne 0 ]]; then
     echo -e "${ERROR} ${RED}BLOCKING: Tests failed${NC}"
     echo ""
     echo -e "${YELLOW}Test failures:${NC}"
-    echo "$test_output" | grep -A 10 -B 5 -i "FAILED"
+    echo "$test_output" | grep -A 10 -B 5 -i "FAIL"
     echo ""
     echo -e "${INFO} All tests must pass before PR creation"
     echo -e "${INFO} Fix failing tests and rerun pr-ready"
     exit 1
 fi
 
-# Extract test summary from Gradle output
-test_passed=$(echo "$test_output" | grep -o "BUILD SUCCESSFUL" | wc -l)
-test_total_line=$(echo "$test_output" | grep -E "tests? completed" | tail -1)
+# Extract test summary from npm test output
+test_passed=$(echo "$test_output" | grep -o "Test Suites:.*passed" | wc -l)
+test_total_line=$(echo "$test_output" | grep -E "Test Suites:" | tail -1)
 if [[ -n "$test_total_line" ]]; then
-    test_total=$(echo "$test_total_line" | grep -o "[0-9]* test" | grep -o "[0-9]*" || echo "0")
-    test_passed=$(echo "$test_total_line" | grep -o "[0-9]* test" | grep -o "[0-9]*" || echo "0")
+    test_total=$(echo "$test_total_line" | grep -o "[0-9]* total" | grep -o "[0-9]*" || echo "0")
+    test_passed_count=$(echo "$test_total_line" | grep -o "[0-9]* passed" | grep -o "[0-9]*" || echo "0")
 else
     test_total="0"
-    test_passed="0"
+    test_passed_count="0"
 fi
-echo -e "${SUCCESS} Test validation passed ($test_passed/$test_total tests)"
+echo -e "${SUCCESS} Test validation passed ($test_passed_count/$test_total tests)"
 
-# Quality Gate 4: Style (AUTOMATED with auto-fix) - Use ktlint for Kotlin
+# Quality Gate 4: Style (AUTOMATED with auto-fix) - Use ESLint/Prettier for TypeScript
 echo -e "\n${WORKING} Quality Gate 4: Style Validation"
-echo -e "${INFO} Running: ./gradlew ktlintCheck --no-daemon"
+echo -e "${INFO} Running: npm run lint"
 
-format_output=$(./gradlew ktlintCheck --no-daemon 2>&1)
+format_output=$(npm run lint 2>&1)
 format_exit_code=$?
 
 if [[ $format_exit_code -ne 0 ]]; then
-    echo -e "${YELLOW} Style issues found - auto-fixing..."
-    ./gradlew ktlintFormat --no-daemon
+    echo -e "${YELLOW} Style issues found - attempting auto-fix with ESLint..."
+    npx eslint . --fix
     
     # Check if there are changes to commit
     if [[ -n "$(git status --porcelain)" ]]; then
@@ -144,7 +144,7 @@ echo -e "\n${SUCCESS} ${GREEN}ALL QUALITY GATES PASSED${NC}"
 echo -e "${INFO} Quality Summary:"
 echo "  ✅ Security: No critical security warnings"
 echo "  ✅ Build: Successful compilation"
-echo "  ✅ Tests: All tests passing ($test_passed/$test_total)"
+echo "  ✅ Tests: All tests passing ($test_passed_count/$test_total)"
 echo "  ✅ Style: Code properly formatted"
 
 # Git Status Check
@@ -293,7 +293,7 @@ gh auth switch --hostname github.com --user appmancer
 original_remote=$(git remote get-url origin)
 
 # Ensure remote uses standard github.com format (should work with appmancer key)
-correct_remote="git@github.com:appmancer/FoxyPlayer.git"
+correct_remote="git@github.com:appmancer/aide.git"
 if [[ "$original_remote" != "$correct_remote" ]]; then
     echo -e "${INFO} Setting remote URL for standard GitHub SSH access..."
     echo -e "${INFO} From: $original_remote"
@@ -339,10 +339,10 @@ Implements $ticket_id: $ticket_title
 ## Quality Validation ✅
 All quality gates automated and verified:
 
-🔒 **Security**: No security warnings or exposed secrets  
-🔨 **Build**: Successful Gradle compilation with no errors  
-🧪 **Tests**: All $test_passed tests passing  
-💅 **Style**: Code properly formatted according to ktlint standards  
+🔒 **Security**: No security vulnerabilities or exposed secrets  
+🔨 **Build**: Successful TypeScript compilation with no errors  
+🧪 **Tests**: All $test_passed_count tests passing  
+💅 **Style**: Code properly formatted according to ESLint standards  
 
 ## Test Coverage
 Implementation includes comprehensive test coverage developed through $tdd_cycles TDD cycles:
@@ -406,7 +406,7 @@ fi
 jq '.phase = "pr-created" | .pr_created_at = now | .pr_created_at |= todate | .pr_url = $url | .quality_gates_passed = true | .files_changed = $files | .test_count = $tests' \
    --arg url "$pr_url" \
    --arg files "$files_changed" \
-   --arg tests "$test_passed" \
+   --arg tests "$test_passed_count" \
    .spectrum/current-ticket.json > .spectrum/current-ticket.json.tmp
 mv .spectrum/current-ticket.json.tmp .spectrum/current-ticket.json
 
@@ -415,10 +415,10 @@ echo -e "${INFO} Configuring remote URL for ongoing development..."
 
 # Determine correct remote for development based on original user
 if [[ "$original_gh_user" == "appmancer" ]]; then
-    dev_remote="git@github.com:appmancer/FoxyPlayer.git"
+    dev_remote="git@github.com:appmancer/aide.git"
     echo -e "${INFO} Keeping appmancer remote: $dev_remote"
 else
-    dev_remote="git@github.com-3Degrees:Sam-3Degrees/FoxyPlayer.git"
+    dev_remote="git@github.com-3Degrees:Sam-3Degrees/aide.git"
     echo -e "${INFO} Setting Sam-3Degrees remote: $dev_remote"
 fi
 
@@ -434,7 +434,7 @@ echo "  📋 Ticket: $ticket_id - $ticket_title"
 echo "  🌳 Branch: $branch"
 echo "  🔀 PR URL: $pr_url"
 echo "  ✅ Quality Gates: All passed automatically"
-echo "  🧪 Tests: $test_passed/$test_total passing"
+echo "  🧪 Tests: $test_passed_count/$test_total passing"
 echo "  🔄 TDD Cycles: $tdd_cycles completed"
 echo "  📁 Files: $files_changed changed (+$insertions -$deletions)"
 echo ""
