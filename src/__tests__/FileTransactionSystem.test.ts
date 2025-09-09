@@ -64,4 +64,14 @@ describe('FileTransactionSystem', () => {
       fileTransactionSystem.createBackup(nonExistentFile);
     }).toThrow('Source file does not exist');
   });
+
+  test('FileTransactionSystem should validate backup file exists before restore', () => {
+    // Arrange - create path to non-existent backup file
+    const nonExistentBackup = path.join(testDir, 'nonexistent.backup');
+    
+    // Act & Assert - should throw error for non-existent backup
+    expect(() => {
+      fileTransactionSystem.restoreBackup(nonExistentBackup, testFile);
+    }).toThrow('Backup file does not exist');
+  });
 });

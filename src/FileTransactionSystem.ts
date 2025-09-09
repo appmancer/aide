@@ -28,6 +28,11 @@ export class FileTransactionSystem {
    * @param targetFilePath Path where the file should be restored
    */
   restoreBackup(backupFilePath: string, targetFilePath: string): void {
+    // Validate backup file exists
+    if (!fs.existsSync(backupFilePath)) {
+      throw new Error('Backup file does not exist');
+    }
+
     // Copy backup to target location
     fs.copyFileSync(backupFilePath, targetFilePath);
   }
