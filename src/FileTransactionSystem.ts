@@ -13,7 +13,7 @@ export class FileTransactionSystem {
     }
 
     // Generate timestamp-based backup filename
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const timestamp = new Date().toISOString().replace(/[^a-zA-Z0-9-_]/g, '-');
     const backupPath = `${sourceFilePath}.backup.${timestamp}`;
 
     // Copy file to backup location
