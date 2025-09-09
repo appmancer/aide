@@ -39,4 +39,19 @@ describe('FileTransactionSystem', () => {
     const backupContent = fs.readFileSync(backupPath, 'utf8');
     expect(backupContent).toBe('original content');
   });
+
+  test('FileTransactionSystem should restore file from backup successfully', () => {
+    // Arrange - create backup first
+    const backupPath = fileTransactionSystem.createBackup(testFile);
+    
+    // Modify original file
+    fs.writeFileSync(testFile, 'modified content');
+    
+    // Act - call the restore method that doesn't exist yet
+    fileTransactionSystem.restoreBackup(backupPath, testFile);
+    
+    // Assert - verify file was restored
+    const restoredContent = fs.readFileSync(testFile, 'utf8');
+    expect(restoredContent).toBe('original content');
+  });
 });

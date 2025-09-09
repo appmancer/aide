@@ -16,4 +16,14 @@ export class FileTransactionSystem {
 
     return backupPath;
   }
+
+  /**
+   * Restores a file from its backup
+   * @param backupFilePath Path to the backup file
+   * @param targetFilePath Path where the file should be restored
+   */
+  restoreBackup(backupFilePath: string, targetFilePath: string): void {
+    // Copy backup to target location
+    fs.copyFileSync(backupFilePath, targetFilePath);
+  }
 }
