@@ -54,4 +54,14 @@ describe('FileTransactionSystem', () => {
     const restoredContent = fs.readFileSync(testFile, 'utf8');
     expect(restoredContent).toBe('original content');
   });
+
+  test('FileTransactionSystem should validate file existence before backup', () => {
+    // Arrange - create path to non-existent file
+    const nonExistentFile = path.join(testDir, 'nonexistent.txt');
+    
+    // Act & Assert - should throw error for non-existent file
+    expect(() => {
+      fileTransactionSystem.createBackup(nonExistentFile);
+    }).toThrow('Source file does not exist');
+  });
 });

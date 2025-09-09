@@ -7,6 +7,11 @@ export class FileTransactionSystem {
    * @returns The backup file path
    */
   createBackup(sourceFilePath: string): string {
+    // Validate source file exists
+    if (!fs.existsSync(sourceFilePath)) {
+      throw new Error('Source file does not exist');
+    }
+
     // Generate timestamp-based backup filename
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const backupPath = `${sourceFilePath}.backup.${timestamp}`;
